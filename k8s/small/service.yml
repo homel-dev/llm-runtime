@@ -1,0 +1,22 @@
+# k8s/small/service.yml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: llm-small
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: llm-small
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: llm-runtime
+    llm.runtime/tier: small
+
+spec:
+
+  selector:
+    app.kubernetes.io/name: llm-small
+
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
