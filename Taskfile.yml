@@ -125,3 +125,18 @@ tasks:
     desc: Benchmark large tier
     cmds:
       - ./hack/benchmark-large.sh
+
+  health-small:
+    desc: Health check small tier
+    cmds:
+      - ./scripts/runtime-health.sh http://localhost:8001
+
+  health-medium:
+    desc: Health check medium tier
+    cmds:
+      - ./scripts/runtime-health.sh http://localhost:8002
+
+  health-large:
+    desc: Health check large tier
+    cmds:
+      - ./scripts/runtime-health.sh http://localhost:8003
