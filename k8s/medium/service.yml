@@ -1,0 +1,22 @@
+# k8s/medium/service.yml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: llm-medium
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: llm-medium
+    app.kubernetes.io/component: inference
+    app.kubernetes.io/part-of: llm-runtime
+    llm.runtime/tier: medium
+
+spec:
+
+  selector:
+    app.kubernetes.io/name: llm-medium
+
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
