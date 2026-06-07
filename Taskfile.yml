@@ -1,0 +1,127 @@
+Taskfile.yml
+version: "3"
+
+vars:
+  NAMESPACE: llm-runtime
+
+tasks:
+
+  deploy:
+    desc: Deploy runtime resources
+    cmds:
+      - kubectl apply -k k8s
+
+  delete:
+    desc: Delete runtime resources
+    cmds:
+      - kubectl delete -k k8s
+
+  status:
+    desc: Show runtime status
+    cmds:
+      - kubectl -n {{.NAMESPACE}} get pods,svc,pvc,configmap
+
+  events:
+    desc: Show namespace events
+    cmds:
+      - kubectl -n {{.NAMESPACE}} get events --sort-by=.lastTimestamp
+
+  pods:
+    desc: List runtime pods
+    cmds:
+      - kubectl -n {{.NAMESPACE}} get pods -o wide
+
+  services:
+    desc: List runtime services
+    cmds:
+      - kubectl -n {{.NAMESPACE}} get svc
+
+  logs-small:
+    desc: Follow llm-small logs
+    cmds:
+      - kubectl -n {{.NAMESPACE}} logs deploy/llm-small -f
+
+  logs-medium:
+    desc: Follow llm-medium logs
+    cmds:
+      - kubectl -n {{.NAMESPACE}} logs deploy/llm-medium -f
+
+  logs-large:
+    desc: Follow llm-large logs
+    cmds:
+      - kubectl -n {{.NAMESPACE}} logs deploy/llm-large -f
+
+  restart-small:
+    desc: Restart llm-small
+    cmds:
+      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-small
+
+  restart-medium:
+    desc: Restart llm-medium
+    cmds:
+      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-medium
+
+  restart-large:
+    desc: Restart llm-large
+    cmds:
+      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-large
+
+  port-forward-small:
+    desc: Port forward llm-small
+    cmds:
+      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-small 8001:8000
+
+  port-forward-medium:
+    desc: Port forward llm-medium
+    cmds:
+      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-medium 8002:8000
+
+  port-forward-large:
+    desc: Port forward llm-large
+    cmds:
+      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-large 8003:8000
+
+  list-small:
+    desc: List models from small tier
+    cmds:
+      - ./scripts/list-models.sh http://localhost:8001
+
+  list-medium:
+    desc: List models from medium tier
+    cmds:
+      - ./scripts/list-models.sh http://localhost:8002
+
+  list-large:
+    desc: List models from large tier
+    cmds:
+      - ./scripts/list-models.sh http://localhost:8003
+
+  smoke-small:
+    desc: Smoke test small tier
+    cmds:
+      - ./scripts/smoke-chat.sh http://localhost:8001
+
+  smoke-medium:
+    desc: Smoke test medium tier
+    cmds:
+      - ./scripts/smoke-chat.sh http://localhost:8002
+
+  smoke-large:
+    desc: Smoke test large tier
+    cmds:
+      - ./scripts/smoke-chat.sh http://localhost:8003
+
+  benchmark-small:
+    desc: Benchmark small tier
+    cmds:
+      - ./hack/benchmark-small.sh
+
+  benchmark-medium:
+    desc: Benchmark medium tier
+    cmds:
+      - ./hack/benchmark-medium.sh
+
+  benchmark-large:
+    desc: Benchmark large tier
+    cmds:
+      - ./hack/benchmark-large.sh
