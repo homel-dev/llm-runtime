@@ -1,0 +1,8 @@
+k8s/namespace.yml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm-runtime
+  labels:
+    app.kubernetes.io/name: llm-runtime
+    app.kubernetes.io/part-of: llm-runtime
