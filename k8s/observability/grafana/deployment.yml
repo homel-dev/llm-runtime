@@ -1,0 +1,87 @@
+# k8s/observability/grafana/deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: grafana
+
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: dashboard
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/component: dashboard
+
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.4.0
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+
+          ports:
+            - name: http
+              containerPort: 3000
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+
+          volumeMounts:
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+
+            - name: dashboard-llm-runtime
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+
+            - name: data
+              mountPath: /var/lib/grafana
+
+      volumes:
+        - name: datasource
+          configMap:
+            name: grafana-datasource
+
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+
+        - name: dashboard-llm-runtime
+          configMap:
+            name: grafana-dashboard-llm-runtime
+
+        - name: data
+          emptyDir: {}

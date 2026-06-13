@@ -1,4 +1,4 @@
-k8s/namespace.yml
+#k8s/namespace.yml
 apiVersion: v1
 kind: Namespace
 metadata:

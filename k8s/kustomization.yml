@@ -6,7 +6,7 @@ namespace: llm-runtime
 
 resources:
   - namespace.yml
-
+  - hf-secret.yml
   - runtime-contract.yml
   - networkpolicy.yml
 
@@ -22,5 +22,7 @@ resources:
   - large/deployment.yml
   - large/service.yml
 
-commonLabels:
-  app.kubernetes.io/part-of: llm-runtime
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/part-of: llm-runtime

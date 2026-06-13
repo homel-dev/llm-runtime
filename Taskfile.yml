@@ -1,157 +1,229 @@
 # Taskfile.yml
 version: "3"
 
-vars:
-  NAMESPACE: llm-runtime
-
 tasks:
 
-  deploy:
-    desc: Deploy runtime resources
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  llm:deploy:
+    desc: Deploy LLM runtime resources
     cmds:
       - kubectl apply -k k8s
 
-  delete:
-    desc: Delete runtime resources
+  llm:delete:
+    desc: Delete LLM runtime resources
     cmds:
       - kubectl delete -k k8s
 
-  status:
-    desc: Show runtime status
+  llm:status:
+    desc: Show LLM runtime status
     cmds:
-      - kubectl -n {{.NAMESPACE}} get pods,svc,pvc,configmap
+      - kubectl -n llm-runtime get pods,svc,pvc,configmap
 
-  events:
-    desc: Show namespace events
+  llm:events:
+    desc: Show LLM runtime namespace events
     cmds:
-      - kubectl -n {{.NAMESPACE}} get events --sort-by=.lastTimestamp
+      - kubectl -n llm-runtime get events --sort-by=.lastTimestamp
 
-  pods:
-    desc: List runtime pods
+  llm:pods:
+    desc: List LLM runtime pods
     cmds:
-      - kubectl -n {{.NAMESPACE}} get pods -o wide
+      - kubectl -n llm-runtime get pods -o wide
 
-  services:
-    desc: List runtime services
+  llm:services:
+    desc: List LLM runtime services
     cmds:
-      - kubectl -n {{.NAMESPACE}} get svc
+      - kubectl -n llm-runtime get svc
 
-  logs-small:
+  llm:logs-small:
     desc: Follow llm-small logs
     cmds:
-      - kubectl -n {{.NAMESPACE}} logs deploy/llm-small -f
+      - kubectl -n llm-runtime logs deploy/llm-small -f
 
-  logs-medium:
+  llm:logs-medium:
     desc: Follow llm-medium logs
     cmds:
-      - kubectl -n {{.NAMESPACE}} logs deploy/llm-medium -f
+      - kubectl -n llm-runtime logs deploy/llm-medium -f
 
-  logs-large:
+  llm:logs-large:
     desc: Follow llm-large logs
     cmds:
-      - kubectl -n {{.NAMESPACE}} logs deploy/llm-large -f
+      - kubectl -n llm-runtime logs deploy/llm-large -f
 
-  restart-small:
+  llm:restart-small:
     desc: Restart llm-small
     cmds:
-      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-small
+      - kubectl -n llm-runtime rollout restart deploy/llm-small
 
-  restart-medium:
+  llm:restart-medium:
     desc: Restart llm-medium
     cmds:
-      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-medium
+      - kubectl -n llm-runtime rollout restart deploy/llm-medium
 
-  restart-large:
+  llm:restart-large:
     desc: Restart llm-large
     cmds:
-      - kubectl -n {{.NAMESPACE}} rollout restart deploy/llm-large
+      - kubectl -n llm-runtime rollout restart deploy/llm-large
 
-  port-forward-small:
-    desc: Port forward llm-small
+  llm:list-small:
+    desc: List models from small tier through cluster DNS
     cmds:
-      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-small 8001:8000
+      - ./scripts/kube-list-models.sh small
 
-  port-forward-medium:
-    desc: Port forward llm-medium
+  llm:list-medium:
+    desc: List models from medium tier through cluster DNS
     cmds:
-      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-medium 8002:8000
+      - ./scripts/kube-list-models.sh medium
 
-  port-forward-large:
-    desc: Port forward llm-large
+  llm:list-large:
+    desc: List models from large tier through cluster DNS
     cmds:
-      - kubectl -n {{.NAMESPACE}} port-forward svc/llm-large 8003:8000
+      - ./scripts/kube-list-models.sh large
 
-  list-small:
-    desc: List models from small tier
+  llm:health-small:
+    desc: Health check small tier through cluster DNS
     cmds:
-      - ./scripts/list-models.sh http://localhost:8001
+      - ./scripts/kube-runtime-health.sh small
 
-  list-medium:
-    desc: List models from medium tier
+  llm:health-medium:
+    desc: Health check medium tier through cluster DNS
     cmds:
-      - ./scripts/list-models.sh http://localhost:8002
+      - ./scripts/kube-runtime-health.sh medium
 
-  list-large:
-    desc: List models from large tier
+  llm:health-large:
+    desc: Health check large tier through cluster DNS
     cmds:
-      - ./scripts/list-models.sh http://localhost:8003
+      - ./scripts/kube-runtime-health.sh large
 
-  smoke-small:
-    desc: Smoke test small tier
+  llm:metrics-small:
+    desc: Check vLLM /metrics endpoint on small tier through cluster DNS
     cmds:
-      - ./scripts/smoke-chat.sh http://localhost:8001
+      - ./scripts/kube-runtime-metrics.sh small
 
-  smoke-medium:
-    desc: Smoke test medium tier
+  llm:metrics-medium:
+    desc: Check vLLM /metrics endpoint on medium tier through cluster DNS
     cmds:
-      - ./scripts/smoke-chat.sh http://localhost:8002
+      - ./scripts/kube-runtime-metrics.sh medium
 
-  smoke-large:
-    desc: Smoke test large tier
+  llm:metrics-large:
+    desc: Check vLLM /metrics endpoint on large tier through cluster DNS
     cmds:
-      - ./scripts/smoke-chat.sh http://localhost:8003
+      - ./scripts/kube-runtime-metrics.sh large
 
-  benchmark-small:
-    desc: Benchmark small tier
+  llm:smoke-small:
+    desc: Smoke test small tier through cluster DNS
     cmds:
-      - ./hack/benchmark-small.sh
+      - ./scripts/kube-smoke-chat.sh small
 
-  benchmark-medium:
-    desc: Benchmark medium tier
+  llm:smoke-medium:
+    desc: Smoke test medium tier through cluster DNS
     cmds:
-      - ./hack/benchmark-medium.sh
+      - ./scripts/kube-smoke-chat.sh medium
 
-  benchmark-large:
-    desc: Benchmark large tier
+  llm:smoke-large:
+    desc: Smoke test large tier through cluster DNS
     cmds:
-      - ./hack/benchmark-large.sh
+      - ./scripts/kube-smoke-chat.sh large
 
-  health-small:
-    desc: Health check small tier
+  llm:benchmark-small:
+    desc: Benchmark small tier through cluster DNS
     cmds:
-      - ./scripts/runtime-health.sh http://localhost:8001
+      - ./hack/kube-benchmark.sh small
 
-  health-medium:
-    desc: Health check medium tier
+  llm:benchmark-medium:
+    desc: Benchmark medium tier through cluster DNS
     cmds:
-      - ./scripts/runtime-health.sh http://localhost:8002
+      - ./hack/kube-benchmark.sh medium
 
-  health-large:
-    desc: Health check large tier
+  llm:benchmark-large:
+    desc: Benchmark large tier through cluster DNS
     cmds:
-      - ./scripts/runtime-health.sh http://localhost:8003
+      - ./hack/kube-benchmark.sh large
 
-  benchmark-small:
-    desc: Benchmark small tier
+  llm:diagnose-startup-small:
+    desc: Diagnose llm-small startup state
     cmds:
-      - ./hack/benchmark.sh http://localhost:8001
+      - ./scripts/vllm-startup-diagnose.sh small
 
-  benchmark-medium:
-    desc: Benchmark medium tier
+  llm:diagnose-startup-medium:
+    desc: Diagnose llm-medium startup state
     cmds:
-      - ./hack/benchmark.sh http://localhost:8002
+      - ./scripts/vllm-startup-diagnose.sh medium
 
-  benchmark-large:
-    desc: Benchmark large tier
+  llm:diagnose-startup-large:
+    desc: Diagnose llm-large startup state
     cmds:
-      - ./hack/benchmark.sh http://localhost:8003
+      - ./scripts/vllm-startup-diagnose.sh large
+
+  observability:deploy:
+    desc: Deploy observability resources
+    cmds:
+      - kubectl apply -k k8s/observability
+
+  observability:delete:
+    desc: Delete observability resources
+    cmds:
+      - kubectl delete -k k8s/observability
+
+  observability:status:
+    desc: Show observability status
+    cmds:
+      - kubectl -n observability get pods,svc,configmap
+
+  observability:events:
+    desc: Show observability namespace events
+    cmds:
+      - kubectl -n observability get events --sort-by=.lastTimestamp
+
+  observability:logs-prometheus:
+    desc: Follow Prometheus logs
+    cmds:
+      - kubectl -n observability logs deploy/prometheus -f
+
+  observability:logs-grafana:
+    desc: Follow Grafana logs
+    cmds:
+      - kubectl -n observability logs deploy/grafana -f
+
+  observability:logs-dcgm:
+    desc: Follow DCGM exporter logs
+    cmds:
+      - kubectl -n observability logs ds/dcgm-exporter -f
+
+  observability:expose-start:
+    desc: Expose Prometheus and Grafana on host/LAN ports
+    cmds:
+      - ./scripts/observability-lan-proxy.sh start
+
+  observability:expose-stop:
+    desc: Stop host/LAN observability proxy
+    cmds:
+      - ./scripts/observability-lan-proxy.sh stop
+
+  observability:expose-status:
+    desc: Show host/LAN observability proxy status
+    cmds:
+      - ./scripts/observability-lan-proxy.sh status
+
+  observability:urls:
+    desc: Print host/LAN URLs for Prometheus and Grafana
+    cmds:
+      - ./scripts/observability-lan-proxy.sh urls
+
+  observability:targets:
+    desc: Print Prometheus scrape targets API output through cluster DNS
+    cmds:
+      - ./scripts/kcurl.sh observability http://prometheus:9090/api/v1/targets | jq .
+
+  observability:vllm-targets:
+    desc: Show Prometheus target state for vLLM scrape jobs through cluster DNS
+    cmds:
+      - ./scripts/kcurl.sh observability http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job | test("^vllm-")) | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+
+  observability:vllm-up:
+    desc: Query Prometheus up metric for vLLM scrape jobs through cluster DNS
+    cmds:
+      - ./scripts/kcurl.sh observability 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D~%22vllm-.*%22%7D' | jq .

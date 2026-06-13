@@ -1,0 +1,19 @@
+# k8s/observability/exporters/dcgm/service.yml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: dcgm-exporter
+
+  labels:
+    app.kubernetes.io/name: dcgm-exporter
+    app.kubernetes.io/component: gpu-metrics
+
+spec:
+  selector:
+    app.kubernetes.io/name: dcgm-exporter
+
+  ports:
+    - name: metrics
+      port: 9400
+      targetPort: 9400

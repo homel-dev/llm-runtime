@@ -1,0 +1,21 @@
+# k8s/observability/prometheus/service.yml
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: prometheus
+
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: metrics
+
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: prometheus
+
+  ports:
+    - name: http
+      port: 9090
+      nodePort: 30090
+      targetPort: 9090
