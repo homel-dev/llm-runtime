@@ -39,7 +39,7 @@ spec:
             - --port
             - "8000"
             - --max-model-len
-            - "4096"
+            - "20000"
             - --gpu-memory-utilization
             - "0.90"
             - --max-num-seqs
