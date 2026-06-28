@@ -33,23 +33,21 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - Qwen/Qwen2.5-32B-Instruct-AWQ
-
+            - casperhansen/deepseek-r1-distill-qwen-32b-awq
             - --host
             - "0.0.0.0"
-
             - --port
             - "8000"
-
+            - --tensor-parallel-size
+            - "2"
+            - --quantization
+            - awq
             - --max-model-len
             - "4096"
-
             - --gpu-memory-utilization
-            - "0.95"
-
+            - "0.92"
             - --max-num-seqs
-            - "2"
-
+            - "1"
             - --enforce-eager
 
           env:
@@ -61,21 +59,20 @@ spec:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
             - name: HUGGINGFACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
-            # Physical host GPU2:
-            # NVIDIA-SMI index 2 / bus 00000000:82:00.0
             - name: NVIDIA_VISIBLE_DEVICES
-              value: GPU-0483e19d-6321-b657-1ed6-b262f2789541
+              value: GPU-0483e19d-6321-b657-1ed6-b262f2789541,GPU-06c039b0-1d69-52eb-2475-45c1dad81aea
 
-            # Inside the container, that single visible GPU becomes CUDA 0.
             - name: CUDA_VISIBLE_DEVICES
-              value: "0"
+              value: "0,1"
 
             - name: NVIDIA_DRIVER_CAPABILITIES
               value: compute,utility
@@ -98,18 +95,20 @@ spec:
             httpGet:
               path: /v1/models
               port: 8000
-            initialDelaySeconds: 120
+            initialDelaySeconds: 180
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 120
+            failureThreshold: 180
 
           resources:
             requests:
-              cpu: "6"
-              memory: 24Gi
+              cpu: "8"
+              memory: 32Gi
+              nvidia.com/gpu: "2"
             limits:
-              cpu: "12"
-              memory: 48Gi
+              cpu: "16"
+              memory: 64Gi
+              nvidia.com/gpu: "2"
 
       volumes:
         - name: hf-cache
@@ -119,4 +118,4 @@ spec:
         - name: dshm
           emptyDir:
             medium: Memory
-            sizeLimit: 16Gi
+            sizeLimit: 32Gi
