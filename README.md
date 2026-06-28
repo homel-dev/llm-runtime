@@ -195,33 +195,33 @@ The runtime does not define project roles.
 Deploy runtime:
 
 ```bash
-task deploy
+task llm:deploy
 ```
 
 View status:
 
 ```bash
-task status
+task llm:status
 ```
 
 List available models:
 
 ```bash
-task list-large
+task llm:list-large
 ```
 
 Run smoke tests:
 
 ```bash
-task smoke-small
-task smoke-medium
-task smoke-large
+task llm:smoke-small
+task llm:smoke-medium
+task llm:smoke-large
 ```
 
 Delete runtime:
 
 ```bash
-task delete
+task llm:delete
 ```
 
 [Back to top](#navigation)
