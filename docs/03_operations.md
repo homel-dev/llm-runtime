@@ -13,7 +13,7 @@ docs/03_operations.md
 - [3. Runtime Deployment](#3-runtime-deployment)
 - [4. Runtime Validation](#4-runtime-validation)
 - [5. Runtime Health Checks](#5-runtime-health-checks)
-- [6. Runtime Observability](#6-runtime-observability)
+- [6. Runtime Metrics and OCO Presentation](#6-runtime-metrics-and-oco-presentation)
 - [7. Capacity Monitoring](#7-capacity-monitoring)
 - [8. Incident Response](#8-incident-response)
 - [9. Runtime Upgrades](#9-runtime-upgrades)
@@ -184,9 +184,9 @@ Health validation should occur after:
 
 ---
 
-## 6. Runtime Observability
+## 6. Runtime Metrics and OCO Presentation
 
-Runtime observability focuses on infrastructure behavior.
+Runtime metrics focus on infrastructure behavior. Prometheus and DCGM exporter remain runtime-owned; Grafana presentation is loaded by OCO from this repository's consumer ConfigMaps.
 
 Examples:
 
@@ -201,7 +201,7 @@ Examples:
 
 These metrics support runtime capacity planning.
 
-Project-specific effectiveness metrics belong to consumer projects.
+Project-specific effectiveness metrics belong to consumer projects. The llm-runtime Grafana dashboard and datasource are published as OCO consumer ConfigMaps under k8s/oco-consumer/.
 
 [Back to top](#navigation)
 

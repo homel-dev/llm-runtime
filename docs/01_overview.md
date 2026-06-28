@@ -85,7 +85,7 @@ The shared runtime architecture exists to support the following goals:
 3. reduced operational overhead
 4. reusable inference infrastructure
 5. project independence
-6. centralized runtime observability
+6. centralized runtime metrics
 7. controlled capacity growth
 8. model experimentation
 9. future scalability
@@ -345,7 +345,7 @@ The runtime owns:
 - service endpoints
 - GPU scheduling
 - runtime health
-- runtime observability
+- runtime metrics production and storage
 - deployment manifests
 - model cache management
 
@@ -363,11 +363,11 @@ Consumer projects own application meaning.
 
 ## 10. Observability Model
 
-The architecture assumes two independent observability domains.
+The architecture assumes separate metrics ownership and presentation ownership.
 
-### Runtime Observability
+### Runtime Metrics
 
-Runtime observability belongs to this repository.
+Runtime metrics production and storage belong to this repository. Shared Grafana presentation belongs to OCO.
 
 Examples:
 
@@ -453,7 +453,7 @@ This repository owns:
 - runtime service definitions
 - runtime deployment manifests
 - runtime contracts
-- runtime observability
+- runtime metrics production and storage
 - runtime operational tooling
 - runtime documentation
 
@@ -478,7 +478,7 @@ Recommended sequence:
 5. move embedded runtime deployments into optional development overlays
 6. make shared runtime the default deployment model
 7. preserve standalone deployment mode where required
-8. add runtime observability
+8. add runtime metrics and publish OCO dashboard contract
 9. add project-specific effectiveness metrics
 
 Migration should not mix runtime infrastructure with project semantics.

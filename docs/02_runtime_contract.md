@@ -184,7 +184,7 @@ The runtime owns:
 - endpoint availability
 - deployment health
 - service discovery
-- runtime observability
+- runtime metrics endpoints and runtime metrics ownership
 - model serving
 - infrastructure lifecycle
 
