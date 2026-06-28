@@ -1,0 +1,10 @@
+# k8s/oco-consumer/role.yml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: observability-console-reader
+  namespace: llm-runtime
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]

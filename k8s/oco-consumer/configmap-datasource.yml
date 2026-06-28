@@ -1,0 +1,19 @@
+# k8s/oco-consumer/configmap-datasource.yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-runtime-datasource
+  namespace: llm-runtime
+  labels:
+    grafana_datasource: "1"
+data:
+  llm-runtime-datasource.yml: |
+    apiVersion: 1
+    datasources:
+      - name: llm-runtime-prometheus
+        uid: llm-runtime-prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.observability.svc.cluster.local:9090
+        isDefault: false
+        editable: false
