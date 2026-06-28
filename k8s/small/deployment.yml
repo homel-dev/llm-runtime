@@ -41,7 +41,7 @@ spec:
             - --device
             - cpu
             - --max-model-len
-            - "4096"
+            - "32000"
             - --max-num-seqs
             - "4"
             - --enforce-eager
