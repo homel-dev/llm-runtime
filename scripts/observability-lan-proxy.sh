@@ -5,14 +5,8 @@ command="${1:-}"
 state_dir="${OBSERVABILITY_PROXY_STATE_DIR:-.runtime/observability-proxy}"
 
 prometheus_name="prometheus"
-grafana_name="grafana"
-
 prometheus_listen_port="${OBSERVABILITY_PROMETHEUS_PORT:-30090}"
-grafana_listen_port="${OBSERVABILITY_GRAFANA_PORT:-30300}"
-
 prometheus_node_port="30090"
-grafana_node_port="30300"
-
 usage() {
   cat >&2 <<USAGE
 usage: $0 <start|stop|status|urls>
@@ -20,7 +14,6 @@ usage: $0 <start|stop|status|urls>
 Environment overrides:
   OBSERVABILITY_PROXY_STATE_DIR   default: .runtime/observability-proxy
   OBSERVABILITY_PROMETHEUS_PORT   default: 30090
-  OBSERVABILITY_GRAFANA_PORT      default: 30300
 USAGE
 }
 
@@ -139,7 +132,6 @@ print_urls() {
   ip="$(host_lan_ip)"
 
   echo "Prometheus  http://${ip}:${prometheus_listen_port}"
-  echo "Grafana     http://${ip}:${grafana_listen_port}"
 }
 
 case "${command}" in
@@ -148,18 +140,15 @@ case "${command}" in
     require_cmd socat
     node_ip="$(minikube_node_ip)"
     start_proxy "${prometheus_name}" "${prometheus_listen_port}" "${node_ip}" "${prometheus_node_port}"
-    start_proxy "${grafana_name}" "${grafana_listen_port}" "${node_ip}" "${grafana_node_port}"
     print_urls
     ;;
 
   stop)
     stop_proxy "${prometheus_name}"
-    stop_proxy "${grafana_name}"
     ;;
 
   status)
     status_proxy "${prometheus_name}"
-    status_proxy "${grafana_name}"
     ;;
 
   urls)

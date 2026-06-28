@@ -33,18 +33,19 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - Qwen/Qwen2.5-Coder-14B-Instruct-AWQ
+            - microsoft/Phi-4-reasoning-plus
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
             - --max-model-len
-            - "4096"
+            - "20000"
             - --gpu-memory-utilization
             - "0.90"
             - --max-num-seqs
-            - "4"
+            - "2"
             - --enforce-eager
+            - --trust-remote-code
 
           env:
             - name: HF_HOME
@@ -55,12 +56,14 @@ spec:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
             - name: HUGGINGFACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
             - name: NVIDIA_VISIBLE_DEVICES
               value: GPU-0de7cad3-de92-f02d-31b1-c0400359ef20
@@ -70,6 +73,9 @@ spec:
 
             - name: NVIDIA_DRIVER_CAPABILITIES
               value: compute,utility
+
+            - name: PYTORCH_CUDA_ALLOC_CONF
+              value: expandable_segments:True
 
           ports:
             - name: http
@@ -83,18 +89,20 @@ spec:
             httpGet:
               path: /v1/models
               port: 8000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 90
+            failureThreshold: 120
 
           resources:
             requests:
               cpu: "4"
-              memory: 16Gi
+              memory: 24Gi
+              nvidia.com/gpu: "1"
             limits:
-              cpu: "8"
-              memory: 32Gi
+              cpu: "10"
+              memory: 48Gi
+              nvidia.com/gpu: "1"
 
       volumes:
         - name: hf-cache

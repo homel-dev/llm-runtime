@@ -159,17 +159,17 @@ tasks:
       - ./scripts/vllm-startup-diagnose.sh large
 
   observability:deploy:
-    desc: Deploy observability resources
+    desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"
     cmds:
       - kubectl apply -k k8s/observability
 
   observability:delete:
-    desc: Delete observability resources
+    desc: "Delete runtime metrics resources: Prometheus and DCGM exporter"
     cmds:
       - kubectl delete -k k8s/observability
 
   observability:status:
-    desc: Show observability status
+    desc: Show runtime metrics status
     cmds:
       - kubectl -n observability get pods,svc,configmap
 
@@ -183,18 +183,13 @@ tasks:
     cmds:
       - kubectl -n observability logs deploy/prometheus -f
 
-  observability:logs-grafana:
-    desc: Follow Grafana logs
-    cmds:
-      - kubectl -n observability logs deploy/grafana -f
-
   observability:logs-dcgm:
     desc: Follow DCGM exporter logs
     cmds:
       - kubectl -n observability logs ds/dcgm-exporter -f
 
   observability:expose-start:
-    desc: Expose Prometheus and Grafana on host/LAN ports
+    desc: Expose Prometheus on host/LAN port
     cmds:
       - ./scripts/observability-lan-proxy.sh start
 
@@ -209,9 +204,26 @@ tasks:
       - ./scripts/observability-lan-proxy.sh status
 
   observability:urls:
-    desc: Print host/LAN URLs for Prometheus and Grafana
+    desc: Print host/LAN URL for Prometheus
     cmds:
       - ./scripts/observability-lan-proxy.sh urls
+
+
+  oco-consumer:deploy:
+    desc: Publish llm-runtime dashboard, datasource, and RBAC for OCO Grafana sidecars
+    cmds:
+      - kubectl apply -k k8s/oco-consumer
+
+  oco-consumer:delete:
+    desc: Remove llm-runtime OCO dashboard, datasource, and RBAC contract
+    cmds:
+      - kubectl delete -k k8s/oco-consumer
+
+  oco-consumer:status:
+    desc: Show llm-runtime OCO consumer ConfigMaps and RBAC
+    cmds:
+      - kubectl -n llm-runtime get configmap llm-runtime-dashboard llm-runtime-datasource
+      - kubectl -n llm-runtime get role,rolebinding observability-console-reader
 
   observability:targets:
     desc: Print Prometheus scrape targets API output through cluster DNS

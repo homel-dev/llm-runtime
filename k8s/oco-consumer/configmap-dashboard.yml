@@ -1,0 +1,1657 @@
+# k8s/oco-consumer/configmap-dashboard.yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-runtime-dashboard
+  namespace: llm-runtime
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-runtime.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "How many vLLM scrape targets currently return /metrics.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "sum(up{job=~\"vllm-.*\",tier=~\"$tier\"})",
+              "refId": "A",
+              "legendFormat": "up",
+              "format": "time_series"
+            }
+          ],
+          "title": "vLLM scrape targets up",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 0
+          },
+          "id": 2,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "sum(vllm:num_requests_running{job=~\"vllm-.*\",tier=~\"$tier\"})",
+              "refId": "A",
+              "legendFormat": "running",
+              "format": "time_series"
+            }
+          ],
+          "title": "Running requests",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 0
+          },
+          "id": 3,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "sum(vllm:num_requests_waiting{job=~\"vllm-.*\",tier=~\"$tier\"})",
+              "refId": "A",
+              "legendFormat": "waiting",
+              "format": "time_series"
+            }
+          ],
+          "title": "Waiting requests",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 0
+          },
+          "id": 4,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"}) * 1024 * 1024",
+              "refId": "A",
+              "legendFormat": "used",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU memory used",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 0
+          },
+          "id": 5,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "sum(DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"})",
+              "refId": "A",
+              "legendFormat": "watts",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU power draw",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 0
+          },
+          "id": 6,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "expr": "max(DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"})",
+              "refId": "A",
+              "legendFormat": "temp",
+              "format": "time_series"
+            }
+          ],
+          "title": "Max GPU temperature",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "Per-card GPU compute utilization from DCGM.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 4
+          },
+          "id": 10,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_GPU_UTIL{gpu=~\"$gpu\"}",
+              "refId": "A",
+              "legendFormat": "GPU {{gpu}} util",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU utilization by card",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "id": 11,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"} * 1024 * 1024",
+              "refId": "A",
+              "legendFormat": "GPU {{gpu}} used",
+              "format": "time_series"
+            },
+            {
+              "expr": "DCGM_FI_DEV_FB_FREE{gpu=~\"$gpu\"} * 1024 * 1024",
+              "refId": "B",
+              "legendFormat": "GPU {{gpu}} free",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU framebuffer memory",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 0,
+            "y": 12
+          },
+          "id": 12,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"}",
+              "refId": "A",
+              "legendFormat": "GPU {{gpu}} power",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU power usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "celsius",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 12
+          },
+          "id": 13,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"}",
+              "refId": "A",
+              "legendFormat": "GPU {{gpu}} temp",
+              "format": "time_series"
+            }
+          ],
+          "title": "GPU temperature",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "Running and waiting request queues by tier.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 19
+          },
+          "id": 20,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "vllm:num_requests_running{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "refId": "A",
+              "legendFormat": "{{tier}} running",
+              "format": "time_series"
+            },
+            {
+              "expr": "vllm:num_requests_waiting{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "refId": "B",
+              "legendFormat": "{{tier}} waiting",
+              "format": "time_series"
+            }
+          ],
+          "title": "vLLM scheduler load",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "KV cache pressure. If blank, this vLLM build does not export gpu_cache_usage_perc.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 19
+          },
+          "id": 21,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "100 * vllm:gpu_cache_usage_perc{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "refId": "A",
+              "legendFormat": "{{tier}} GPU KV cache",
+              "format": "time_series"
+            }
+          ],
+          "title": "vLLM KV cache usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "tps",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 27
+          },
+          "id": 22,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (tier) (rate(vllm:prompt_tokens_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "{{tier}} prompt tok/s",
+              "format": "time_series"
+            },
+            {
+              "expr": "sum by (tier) (rate(vllm:generation_tokens_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
+              "refId": "B",
+              "legendFormat": "{{tier}} generation tok/s",
+              "format": "time_series"
+            }
+          ],
+          "title": "Token throughput",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 27
+          },
+          "id": 23,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (tier, finished_reason) (rate(vllm:request_success_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "{{tier}} {{finished_reason}}",
+              "format": "time_series"
+            }
+          ],
+          "title": "Request success rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 35
+          },
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:e2e_request_latency_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "refId": "A",
+              "legendFormat": "{{tier}} p95",
+              "format": "time_series"
+            }
+          ],
+          "title": "End-to-end latency p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 35
+          },
+          "id": 31,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:time_to_first_token_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "refId": "A",
+              "legendFormat": "{{tier}} p95",
+              "format": "time_series"
+            }
+          ],
+          "title": "Time to first token p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 35
+          },
+          "id": 32,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:time_per_output_token_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "refId": "A",
+              "legendFormat": "{{tier}} p95",
+              "format": "time_series"
+            }
+          ],
+          "title": "Time per output token p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 43
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (tier) (rate(vllm:request_prompt_tokens_sum{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])) / clamp_min(sum by (tier) (rate(vllm:request_prompt_tokens_count{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])), 1)",
+              "refId": "A",
+              "legendFormat": "{{tier}} avg prompt tokens",
+              "format": "time_series"
+            }
+          ],
+          "title": "Prompt tokens per request",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 43
+          },
+          "id": 34,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (tier) (rate(vllm:request_generation_tokens_sum{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])) / clamp_min(sum by (tier) (rate(vllm:request_generation_tokens_count{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])), 1)",
+              "refId": "A",
+              "legendFormat": "{{tier}} avg generation tokens",
+              "format": "time_series"
+            }
+          ],
+          "title": "Generation tokens per request",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 51
+          },
+          "id": 40,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "process_resident_memory_bytes{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "refId": "A",
+              "legendFormat": "{{tier}} RSS",
+              "format": "time_series"
+            }
+          ],
+          "title": "vLLM process RSS",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 8,
+            "y": 51
+          },
+          "id": 41,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "rate(process_cpu_seconds_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])",
+              "refId": "A",
+              "legendFormat": "{{tier}} CPU cores",
+              "format": "time_series"
+            }
+          ],
+          "title": "vLLM process CPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "Fallback FastAPI/HTTP histogram if exported by this image.",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "linear",
+                "barAlignment": 0,
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "insertNulls": false,
+                "showPoints": "never",
+                "pointSize": 5,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                },
+                "axisPlacement": "auto",
+                "axisLabel": "",
+                "axisColorMode": "text",
+                "axisBorderShow": false,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "axisCenteredZero": false,
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 51
+          },
+          "id": 42,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(http_request_duration_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "refId": "A",
+              "legendFormat": "{{tier}} http p95",
+              "format": "time_series"
+            }
+          ],
+          "title": "API HTTP p95 latency",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 58
+          },
+          "id": 50,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true
+          },
+          "targets": [
+            {
+              "expr": "up{job=~\"vllm-.*|dcgm-exporter|prometheus\"}",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "title": "Scrape target health",
+          "type": "table",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                },
+                "indexByName": {},
+                "renameByName": {
+                  "Value": "up"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": [
+        "llm-runtime",
+        "vllm",
+        "gpu",
+        "dcgm"
+      ],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "llm-runtime-prometheus"
+            },
+            "definition": "label_values(up{job=~\"vllm-.*\"}, tier)",
+            "hide": 0,
+            "includeAll": true,
+            "multi": true,
+            "name": "tier",
+            "options": [],
+            "query": {
+              "query": "label_values(up{job=~\"vllm-.*\"}, tier)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query",
+            "allValue": ".*"
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "llm-runtime-prometheus"
+            },
+            "definition": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
+            "hide": 0,
+            "includeAll": true,
+            "multi": true,
+            "name": "gpu",
+            "options": [],
+            "query": {
+              "query": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 1,
+            "type": "query",
+            "allValue": ".*"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {
+        "refresh_intervals": [
+          "5s",
+          "10s",
+          "30s",
+          "1m",
+          "5m",
+          "15m",
+          "30m",
+          "1h"
+        ]
+      },
+      "timezone": "browser",
+      "title": "LLM Runtime Observability",
+      "uid": "llm-runtime-observability",
+      "version": 2,
+      "weekStart": ""
+    }

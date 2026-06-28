@@ -11,16 +11,10 @@ resources:
   - prometheus/deployment.yml
   - prometheus/service.yml
 
-  - grafana/configmap-dashboard-provider.yml
-  - grafana/configmap-datasource.yml
-  - grafana/configmap-dashboard-llm-runtime.yml
-  - grafana/deployment.yml
-  - grafana/service.yml
-
   - exporters/dcgm/daemonset.yml
   - exporters/dcgm/service.yml
 
 labels:
   - includeSelectors: true
     pairs:
-      app.kubernetes.io/part-of: llm-runtime-observability
+      app.kubernetes.io/part-of: llm-runtime-metrics

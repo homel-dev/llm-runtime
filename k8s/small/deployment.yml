@@ -33,17 +33,17 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - Qwen/Qwen2.5-7B-Instruct
+            - Qwen/Qwen2.5-3B-Instruct
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
+            - --device
+            - cpu
             - --max-model-len
-            - "4096"
-            - --gpu-memory-utilization
-            - "0.85"
+            - "32000"
             - --max-num-seqs
-            - "8"
+            - "4"
             - --enforce-eager
 
           env:
@@ -55,21 +55,20 @@ spec:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
             - name: HUGGINGFACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-token
                   key: HF_TOKEN
+                  optional: true
 
-            - name: NVIDIA_VISIBLE_DEVICES
-              value: GPU-06c039b0-1d69-52eb-2475-45c1dad81aea
+            - name: VLLM_TARGET_DEVICE
+              value: cpu
 
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0"
-
-            - name: NVIDIA_DRIVER_CAPABILITIES
-              value: compute,utility
+            - name: VLLM_CPU_KVCACHE_SPACE
+              value: "8"
 
           ports:
             - name: http
@@ -83,18 +82,18 @@ spec:
             httpGet:
               path: /v1/models
               port: 8000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 60
+            failureThreshold: 90
 
           resources:
             requests:
-              cpu: "2"
-              memory: 8Gi
-            limits:
               cpu: "4"
-              memory: 16Gi
+              memory: 12Gi
+            limits:
+              cpu: "12"
+              memory: 32Gi
 
       volumes:
         - name: hf-cache
