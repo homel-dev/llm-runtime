@@ -43,7 +43,7 @@ spec:
             - --quantization
             - awq
             - --max-model-len
-            - "4096"
+            - "120000"
             - --gpu-memory-utilization
             - "0.92"
             - --max-num-seqs
