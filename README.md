@@ -34,7 +34,7 @@ The repository owns:
 - runtime service contracts
 - deployment manifests
 - operational tooling
-- runtime observability
+- runtime metrics production and storage
 
 The repository does not own:
 
@@ -81,7 +81,7 @@ This repository provides:
 - stable runtime service endpoints
 - runtime service contracts
 - shared operational tooling
-- observability integration
+- OCO consumer dashboard and datasource integration
 - deployment automation
 - runtime documentation
 
@@ -139,11 +139,14 @@ Projects remain independent.
 │   │
 │   ├── small/
 │   ├── medium/
-│   └── large/
+│   ├── large/
+│   ├── observability/        # runtime-owned Prometheus and DCGM exporter
+│   └── oco-consumer/         # dashboard, datasource, and RBAC published for OCO
 │
 ├── scripts/
 │   ├── list-models.sh
-│   └── smoke-chat.sh
+│   ├── smoke-chat.sh
+│   └── observability-lan-proxy.sh
 │
 └── hack/
     ├── benchmark-small.sh
