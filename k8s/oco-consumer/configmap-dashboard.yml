@@ -1500,7 +1500,7 @@ data:
           },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(http_request_duration_highr_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(http_request_duration_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
               "refId": "A",
               "legendFormat": "{{tier}} http p95",
               "format": "time_series"
