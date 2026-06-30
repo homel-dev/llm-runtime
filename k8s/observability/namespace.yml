@@ -1,6 +1,0 @@
-# k8s/observability/namespace.yml
-apiVersion: v1
-kind: Namespace
-
-metadata:
-  name: observability

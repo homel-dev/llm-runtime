@@ -21,6 +21,9 @@ spec:
         app.kubernetes.io/component: gpu-metrics
 
     spec:
+      tolerations:
+        - operator: Exists
+
       containers:
         - name: dcgm-exporter
           image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.9-3.6.1-ubuntu22.04
@@ -45,6 +48,3 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 12
-
-      tolerations:
-        - operator: Exists

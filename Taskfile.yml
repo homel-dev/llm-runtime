@@ -8,35 +8,25 @@ tasks:
     cmds:
       - task --list
 
-  llm:deploy:
+  miniup:
+    desc: Start minikube
+    cmds:
+      - minikube start --driver=docker --cpus=8 --memory=16384 --gpus all
+
+  up:
     desc: Deploy LLM runtime resources
     cmds:
       - kubectl apply -k k8s
 
-  llm:delete:
+  down:
     desc: Delete LLM runtime resources
     cmds:
       - kubectl delete -k k8s
 
-  llm:status:
+  status:
     desc: Show LLM runtime status
     cmds:
       - kubectl -n llm-runtime get pods,svc,pvc,configmap
-
-  llm:events:
-    desc: Show LLM runtime namespace events
-    cmds:
-      - kubectl -n llm-runtime get events --sort-by=.lastTimestamp
-
-  llm:pods:
-    desc: List LLM runtime pods
-    cmds:
-      - kubectl -n llm-runtime get pods -o wide
-
-  llm:services:
-    desc: List LLM runtime services
-    cmds:
-      - kubectl -n llm-runtime get svc
 
   llm:logs-small:
     desc: Follow llm-small logs
@@ -171,22 +161,22 @@ tasks:
   observability:status:
     desc: Show runtime metrics status
     cmds:
-      - kubectl -n observability get pods,svc,configmap
+      - kubectl -n llm-runtime get pods,svc,configmap
 
   observability:events:
     desc: Show observability namespace events
     cmds:
-      - kubectl -n observability get events --sort-by=.lastTimestamp
+      - kubectl -n llm-runtime get events --sort-by=.lastTimestamp
 
   observability:logs-prometheus:
     desc: Follow Prometheus logs
     cmds:
-      - kubectl -n observability logs deploy/prometheus -f
+      - kubectl -n llm-runtime logs deploy/prometheus -f
 
   observability:logs-dcgm:
     desc: Follow DCGM exporter logs
     cmds:
-      - kubectl -n observability logs ds/dcgm-exporter -f
+      - kubectl -n llm-runtime logs ds/dcgm-exporter -f
 
   observability:expose-start:
     desc: Expose Prometheus on host/LAN port

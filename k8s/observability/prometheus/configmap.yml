@@ -19,7 +19,7 @@ data:
       - job_name: prometheus
         static_configs:
           - targets:
-              - prometheus.observability.svc.cluster.local:9090
+              - prometheus.llm-runtime.svc.cluster.local:9090
 
       - job_name: vllm-small
         metrics_path: /metrics
@@ -52,6 +52,6 @@ data:
         metrics_path: /metrics
         static_configs:
           - targets:
-              - dcgm-exporter.observability.svc.cluster.local:9400
+              - dcgm-exporter.llm-runtime.svc.cluster.local:9400
             labels:
               subsystem: gpu

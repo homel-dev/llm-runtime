@@ -14,6 +14,6 @@ data:
         uid: llm-runtime-prometheus
         type: prometheus
         access: proxy
-        url: http://prometheus.observability.svc.cluster.local:9090
+        url: http://prometheus.llm-runtime.svc.cluster.local:9090
         isDefault: false
         editable: false

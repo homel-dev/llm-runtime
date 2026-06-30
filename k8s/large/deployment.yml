@@ -40,12 +40,10 @@ spec:
             - "8000"
             - --tensor-parallel-size
             - "2"
-            - --quantization
-            - awq
             - --max-model-len
-            - "120000"
+            - "82000"
             - --gpu-memory-utilization
-            - "0.92"
+            - "0.85"
             - --max-num-seqs
             - "1"
             - --enforce-eager
