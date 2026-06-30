@@ -29,7 +29,6 @@ data:
       "fiscalYearStartMonth": 0,
       "graphTooltip": 1,
       "links": [],
-      "liveNow": false,
       "panels": [
         {
           "datasource": {
@@ -39,6 +38,20 @@ data:
           "description": "How many vLLM scrape targets currently return /metrics.",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "short"
             },
             "overrides": []
@@ -55,6 +68,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -66,12 +80,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum(up{job=~\"vllm-.*\",tier=~\"$tier\"})",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "up",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "vLLM scrape targets up",
@@ -85,6 +100,20 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "short"
             },
             "overrides": []
@@ -101,6 +130,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -112,12 +142,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum(vllm:num_requests_running{job=~\"vllm-.*\",tier=~\"$tier\"})",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "running",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "Running requests",
@@ -131,6 +162,20 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "short"
             },
             "overrides": []
@@ -147,6 +192,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -158,12 +204,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum(vllm:num_requests_waiting{job=~\"vllm-.*\",tier=~\"$tier\"})",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "waiting",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "Waiting requests",
@@ -177,6 +224,20 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "bytes"
             },
             "overrides": []
@@ -193,6 +254,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -204,12 +266,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum(DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"}) * 1024 * 1024",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "used",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "GPU memory used",
@@ -223,6 +286,20 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "watt"
             },
             "overrides": []
@@ -239,6 +316,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -250,12 +328,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum(DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"})",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "watts",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "GPU power draw",
@@ -269,6 +348,20 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "celsius"
             },
             "overrides": []
@@ -285,6 +378,7 @@ data:
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
+            "percentChangeColorMode": "standard",
             "reduceOptions": {
               "calcs": [
                 "lastNotNull"
@@ -296,12 +390,13 @@ data:
             "textMode": "auto",
             "wideLayout": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "max(DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"})",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "temp",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "Max GPU temperature",
@@ -315,45 +410,63 @@ data:
           "description": "Per-card GPU compute utilization from DCGM.",
           "fieldConfig": {
             "defaults": {
-              "unit": "percent",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percent"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 12,
+            "h": 6,
+            "w": 8,
             "x": 0,
             "y": 4
           },
@@ -370,12 +483,13 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "DCGM_FI_DEV_GPU_UTIL{gpu=~\"$gpu\"}",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "GPU {{gpu}} util",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "GPU utilization by card",
@@ -386,49 +500,166 @@ data:
             "type": "prometheus",
             "uid": "llm-runtime-prometheus"
           },
-          "description": "",
+          "description": "Running and waiting request queues by tier.",
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 4
+          },
+          "id": 20,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "expr": "vllm:num_requests_running{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "format": "time_series",
+              "legendFormat": "{{tier}} running",
+              "refId": "A"
+            },
+            {
+              "expr": "vllm:num_requests_waiting{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "format": "time_series",
+              "legendFormat": "{{tier}} waiting",
+              "refId": "B"
+            }
+          ],
+          "title": "vLLM scheduler load",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
             "y": 4
           },
           "id": 11,
@@ -444,18 +675,19 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "DCGM_FI_DEV_FB_USED{gpu=~\"$gpu\"} * 1024 * 1024",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "GPU {{gpu}} used",
-              "format": "time_series"
+              "refId": "A"
             },
             {
               "expr": "DCGM_FI_DEV_FB_FREE{gpu=~\"$gpu\"} * 1024 * 1024",
-              "refId": "B",
+              "format": "time_series",
               "legendFormat": "GPU {{gpu}} free",
-              "format": "time_series"
+              "refId": "B"
             }
           ],
           "title": "GPU framebuffer memory",
@@ -469,47 +701,65 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "watt",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "watt"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 7,
-            "w": 12,
+            "h": 5,
+            "w": 8,
             "x": 0,
-            "y": 12
+            "y": 10
           },
           "id": 12,
           "options": {
@@ -524,12 +774,13 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "DCGM_FI_DEV_POWER_USAGE{gpu=~\"$gpu\"}",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "GPU {{gpu}} power",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "GPU power usage",
@@ -543,275 +794,65 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "celsius",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "tps"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 12
-          },
-          "id": 13,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"}",
-              "refId": "A",
-              "legendFormat": "GPU {{gpu}} temp",
-              "format": "time_series"
-            }
-          ],
-          "title": "GPU temperature",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "Running and waiting request queues by tier.",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 19
-          },
-          "id": 20,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "vllm:num_requests_running{job=~\"vllm-.*\",tier=~\"$tier\"}",
-              "refId": "A",
-              "legendFormat": "{{tier}} running",
-              "format": "time_series"
-            },
-            {
-              "expr": "vllm:num_requests_waiting{job=~\"vllm-.*\",tier=~\"$tier\"}",
-              "refId": "B",
-              "legendFormat": "{{tier}} waiting",
-              "format": "time_series"
-            }
-          ],
-          "title": "vLLM scheduler load",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "KV cache pressure. If blank, this vLLM build does not export gpu_cache_usage_perc.",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 19
-          },
-          "id": 21,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "100 * vllm:gpu_cache_usage_perc{job=~\"vllm-.*\",tier=~\"$tier\"}",
-              "refId": "A",
-              "legendFormat": "{{tier}} GPU KV cache",
-              "format": "time_series"
-            }
-          ],
-          "title": "vLLM KV cache usage",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "tps",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 27
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 10
           },
           "id": 22,
           "options": {
@@ -826,18 +867,19 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum by (tier) (rate(vllm:prompt_tokens_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "{{tier}} prompt tok/s",
-              "format": "time_series"
+              "refId": "A"
             },
             {
               "expr": "sum by (tier) (rate(vllm:generation_tokens_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
-              "refId": "B",
+              "format": "time_series",
               "legendFormat": "{{tier}} generation tok/s",
-              "format": "time_series"
+              "refId": "B"
             }
           ],
           "title": "Token throughput",
@@ -851,47 +893,65 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "reqps",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 27
+            "h": 5,
+            "w": 8,
+            "x": 16,
+            "y": 10
           },
           "id": 23,
           "options": {
@@ -906,12 +966,13 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum by (tier, finished_reason) (rate(vllm:request_success_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m]))",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "{{tier}} {{finished_reason}}",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "Request success rate",
@@ -925,49 +986,67 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "celsius"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
+            "h": 5,
             "w": 8,
             "x": 0,
-            "y": 35
+            "y": 15
           },
-          "id": 30,
+          "id": 13,
           "options": {
             "legend": {
               "calcs": [],
@@ -980,15 +1059,16 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:e2e_request_latency_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
-              "refId": "A",
-              "legendFormat": "{{tier}} p95",
-              "format": "time_series"
+              "expr": "DCGM_FI_DEV_GPU_TEMP{gpu=~\"$gpu\"}",
+              "format": "time_series",
+              "legendFormat": "GPU {{gpu}} temp",
+              "refId": "A"
             }
           ],
-          "title": "End-to-end latency p95",
+          "title": "GPU temperature",
           "type": "timeseries"
         },
         {
@@ -999,269 +1079,65 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
-            "y": 35
-          },
-          "id": 31,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:time_to_first_token_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
-              "refId": "A",
-              "legendFormat": "{{tier}} p95",
-              "format": "time_series"
-            }
-          ],
-          "title": "Time to first token p95",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
+            "h": 6,
             "w": 8,
             "x": 16,
-            "y": 35
-          },
-          "id": 32,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:time_per_output_token_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
-              "refId": "A",
-              "legendFormat": "{{tier}} p95",
-              "format": "time_series"
-            }
-          ],
-          "title": "Time per output token p95",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 43
-          },
-          "id": 33,
-          "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
-            },
-            "tooltip": {
-              "mode": "multi",
-              "sort": "desc"
-            }
-          },
-          "targets": [
-            {
-              "expr": "sum by (tier) (rate(vllm:request_prompt_tokens_sum{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])) / clamp_min(sum by (tier) (rate(vllm:request_prompt_tokens_count{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])), 1)",
-              "refId": "A",
-              "legendFormat": "{{tier}} avg prompt tokens",
-              "format": "time_series"
-            }
-          ],
-          "title": "Prompt tokens per request",
-          "type": "timeseries"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "llm-runtime-prometheus"
-          },
-          "description": "",
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
-                "barAlignment": 0,
-                "lineWidth": 1,
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
-                },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 43
+            "y": 15
           },
           "id": 34,
           "options": {
@@ -1276,12 +1152,13 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "sum by (tier) (rate(vllm:request_generation_tokens_sum{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])) / clamp_min(sum by (tier) (rate(vllm:request_generation_tokens_count{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])), 1)",
-              "refId": "A",
+              "format": "time_series",
               "legendFormat": "{{tier}} avg generation tokens",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "Generation tokens per request",
@@ -1295,49 +1172,67 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "bytes",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 7,
+            "h": 5,
             "w": 8,
-            "x": 0,
-            "y": 51
+            "x": 8,
+            "y": 16
           },
-          "id": 40,
+          "id": 31,
           "options": {
             "legend": {
               "calcs": [],
@@ -1350,15 +1245,16 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
-              "expr": "process_resident_memory_bytes{job=~\"vllm-.*\",tier=~\"$tier\"}",
-              "refId": "A",
-              "legendFormat": "{{tier}} RSS",
-              "format": "time_series"
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:time_to_first_token_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "format": "time_series",
+              "legendFormat": "{{tier}} p95",
+              "refId": "A"
             }
           ],
-          "title": "vLLM process RSS",
+          "title": "Time to first token p95",
           "type": "timeseries"
         },
         {
@@ -1369,49 +1265,67 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
-              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
             },
             "overrides": []
           },
           "gridPos": {
-            "h": 7,
+            "h": 8,
             "w": 8,
-            "x": 8,
-            "y": 51
+            "x": 0,
+            "y": 20
           },
-          "id": 41,
+          "id": 30,
           "options": {
             "legend": {
               "calcs": [],
@@ -1424,15 +1338,109 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
-              "expr": "rate(process_cpu_seconds_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])",
-              "refId": "A",
-              "legendFormat": "{{tier}} CPU cores",
-              "format": "time_series"
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(vllm:e2e_request_latency_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "format": "time_series",
+              "legendFormat": "{{tier}} p95",
+              "refId": "A"
             }
           ],
-          "title": "vLLM process CPU",
+          "title": "End-to-end latency p95",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 21
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "expr": "sum by (tier) (rate(vllm:request_prompt_tokens_sum{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])) / clamp_min(sum by (tier) (rate(vllm:request_prompt_tokens_count{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])), 1)",
+              "format": "time_series",
+              "legendFormat": "{{tier}} avg prompt tokens",
+              "refId": "A"
+            }
+          ],
+          "title": "Prompt tokens per request",
           "type": "timeseries"
         },
         {
@@ -1443,39 +1451,57 @@ data:
           "description": "Fallback FastAPI/HTTP histogram if exported by this image.",
           "fieldConfig": {
             "defaults": {
-              "unit": "s",
+              "color": {
+                "mode": "palette-classic"
+              },
               "custom": {
-                "drawStyle": "line",
-                "lineInterpolation": "linear",
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
                 "barAlignment": 0,
-                "lineWidth": 1,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
                 "fillOpacity": 8,
                 "gradientMode": "none",
-                "spanNulls": false,
-                "insertNulls": false,
-                "showPoints": "never",
-                "pointSize": 5,
-                "stacking": {
-                  "mode": "none",
-                  "group": "A"
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                "axisPlacement": "auto",
-                "axisLabel": "",
-                "axisColorMode": "text",
-                "axisBorderShow": false,
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
                 },
-                "axisCenteredZero": false,
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
                 "thresholdsStyle": {
                   "mode": "off"
                 }
-              }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
             },
             "overrides": []
           },
@@ -1483,7 +1509,7 @@ data:
             "h": 7,
             "w": 8,
             "x": 16,
-            "y": 51
+            "y": 21
           },
           "id": 42,
           "options": {
@@ -1498,12 +1524,13 @@ data:
               "sort": "desc"
             }
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(http_request_duration_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
-              "refId": "A",
+              "expr": "histogram_quantile(0.95, sum by (le, tier) (rate(http_request_duration_highr_seconds_bucket{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])))",
+              "format": "time_series",
               "legendFormat": "{{tier}} http p95",
-              "format": "time_series"
+              "refId": "A"
             }
           ],
           "title": "API HTTP p95 latency",
@@ -1517,6 +1544,27 @@ data:
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
               "unit": "short"
             },
             "overrides": []
@@ -1525,7 +1573,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 58
+            "y": 28
           },
           "id": 50,
           "options": {
@@ -1540,16 +1588,16 @@ data:
             },
             "showHeader": true
           },
+          "pluginVersion": "11.4.0",
           "targets": [
             {
               "expr": "up{job=~\"vllm-.*|dcgm-exporter|prometheus\"}",
-              "refId": "A",
               "format": "table",
-              "instant": true
+              "instant": true,
+              "refId": "A"
             }
           ],
           "title": "Scrape target health",
-          "type": "table",
           "transformations": [
             {
               "id": "organize",
@@ -1564,11 +1612,199 @@ data:
                 }
               }
             }
-          ]
+          ],
+          "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 0,
+            "y": 36
+          },
+          "id": 40,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "expr": "process_resident_memory_bytes{job=~\"vllm-.*\",tier=~\"$tier\"}",
+              "format": "time_series",
+              "legendFormat": "{{tier}} RSS",
+              "refId": "A"
+            }
+          ],
+          "title": "vLLM process RSS",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 8,
+            "x": 16,
+            "y": 36
+          },
+          "id": 41,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "expr": "rate(process_cpu_seconds_total{job=~\"vllm-.*\",tier=~\"$tier\"}[5m])",
+              "format": "time_series",
+              "legendFormat": "{{tier}} CPU cores",
+              "refId": "A"
+            }
+          ],
+          "title": "vLLM process CPU",
+          "type": "timeseries"
         }
       ],
+      "preload": false,
       "refresh": "10s",
-      "schemaVersion": 39,
+      "schemaVersion": 40,
       "tags": [
         "llm-runtime",
         "vllm",
@@ -1578,8 +1814,8 @@ data:
       "templating": {
         "list": [
           {
+            "allValue": ".*",
             "current": {
-              "selected": true,
               "text": "All",
               "value": "$__all"
             },
@@ -1588,7 +1824,6 @@ data:
               "uid": "llm-runtime-prometheus"
             },
             "definition": "label_values(up{job=~\"vllm-.*\"}, tier)",
-            "hide": 0,
             "includeAll": true,
             "multi": true,
             "name": "tier",
@@ -1599,14 +1834,12 @@ data:
             },
             "refresh": 2,
             "regex": "",
-            "skipUrlSync": false,
             "sort": 1,
-            "type": "query",
-            "allValue": ".*"
+            "type": "query"
           },
           {
+            "allValue": ".*",
             "current": {
-              "selected": true,
               "text": "All",
               "value": "$__all"
             },
@@ -1615,7 +1848,6 @@ data:
               "uid": "llm-runtime-prometheus"
             },
             "definition": "label_values(DCGM_FI_DEV_GPU_UTIL, gpu)",
-            "hide": 0,
             "includeAll": true,
             "multi": true,
             "name": "gpu",
@@ -1626,10 +1858,8 @@ data:
             },
             "refresh": 2,
             "regex": "",
-            "skipUrlSync": false,
             "sort": 1,
-            "type": "query",
-            "allValue": ".*"
+            "type": "query"
           }
         ]
       },
@@ -1652,6 +1882,6 @@ data:
       "timezone": "browser",
       "title": "LLM Runtime Observability",
       "uid": "llm-runtime-observability",
-      "version": 2,
+      "version": 1,
       "weekStart": ""
     }
