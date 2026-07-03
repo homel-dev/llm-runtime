@@ -33,17 +33,23 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - casperhansen/deepseek-r1-distill-qwen-32b-awq
+            - casperhansen/deepseek-r1-distill-llama-70b-awq
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
+            - --served-model-name
+            - DeepSeek-R1-Distill-Llama-70B-AWQ
+            - --quantization
+            - awq
             - --tensor-parallel-size
-            - "2"
+            - "1"
+            - --pipeline-parallel-size
+            - "3"
             - --max-model-len
-            - "82000"
+            - "32768"
             - --gpu-memory-utilization
-            - "0.85"
+            - "0.92"
             - --max-num-seqs
             - "1"
             - --enforce-eager
@@ -66,12 +72,6 @@ spec:
                   key: HF_TOKEN
                   optional: true
 
-            - name: NVIDIA_VISIBLE_DEVICES
-              value: GPU-0483e19d-6321-b657-1ed6-b262f2789541,GPU-06c039b0-1d69-52eb-2475-45c1dad81aea
-
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0,1"
-
             - name: NVIDIA_DRIVER_CAPABILITIES
               value: compute,utility
 
@@ -93,7 +93,7 @@ spec:
             httpGet:
               path: /v1/models
               port: 8000
-            initialDelaySeconds: 180
+            initialDelaySeconds: 300
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 180
@@ -101,12 +101,12 @@ spec:
           resources:
             requests:
               cpu: "8"
-              memory: 32Gi
-              nvidia.com/gpu: "2"
+              memory: 48Gi
+              nvidia.com/gpu: "3"
             limits:
               cpu: "16"
-              memory: 64Gi
-              nvidia.com/gpu: "2"
+              memory: 96Gi
+              nvidia.com/gpu: "3"
 
       volumes:
         - name: hf-cache
