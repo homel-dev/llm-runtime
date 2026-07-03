@@ -28,23 +28,28 @@ spec:
 
     spec:
       containers:
-        - name: vllm
-          image: vllm/vllm-openai:latest
+        - name: llama-cpp
+          image: ghcr.io/ggml-org/llama.cpp:server
           imagePullPolicy: IfNotPresent
 
           args:
-            - Qwen/Qwen2.5-3B-Instruct
+            - -hf
+            - Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
+            - --alias
+            - Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
-            - --device
-            - cpu
-            - --max-model-len
-            - "32000"
-            - --max-num-seqs
-            - "4"
-            - --enforce-eager
+            - --ctx-size
+            - "32768"
+            - --parallel
+            - "1"
+            - --threads
+            - "12"
+            - --threads-batch
+            - "12"
+            - --metrics
 
           env:
             - name: HF_HOME
@@ -64,12 +69,6 @@ spec:
                   key: HF_TOKEN
                   optional: true
 
-            - name: VLLM_TARGET_DEVICE
-              value: cpu
-
-            - name: VLLM_CPU_KVCACHE_SPACE
-              value: "8"
-
           ports:
             - name: http
               containerPort: 8000
@@ -82,17 +81,17 @@ spec:
             httpGet:
               path: /v1/models
               port: 8000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 90
+            failureThreshold: 120
 
           resources:
             requests:
-              cpu: "4"
-              memory: 12Gi
+              cpu: "8"
+              memory: 16Gi
             limits:
-              cpu: "12"
+              cpu: "16"
               memory: 32Gi
 
       volumes:
