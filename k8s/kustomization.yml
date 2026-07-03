@@ -14,9 +14,9 @@ resources:
   - small/deployment.yml
   - small/service.yml
 
-  - medium/pvc.yml
-  - medium/deployment.yml
-  - medium/service.yml
+#  - medium/pvc.yml
+#  - medium/deployment.yml
+#  - medium/service.yml
 
   - large/pvc.yml
   - large/deployment.yml
