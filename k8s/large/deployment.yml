@@ -42,6 +42,8 @@ spec:
             - "2"
             - --quantization
             - awq_marlin
+            - --dtype
+            - float16
             - --max-model-len
             - "120000"
             - --gpu-memory-utilization
