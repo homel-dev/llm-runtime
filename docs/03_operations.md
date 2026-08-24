@@ -1,10 +1,10 @@
 # OPERATIONS GUIDE
-## Deployment, Validation, and Runtime Operations
-### Operational Procedures Specification
+
+*Deployment, validation, recovery, and rollback procedures.*
 
 ---
 
-## Navigation
+## Table of Contents
 
 - [0. Status and Scope](#0-status-and-scope)
 - [1. Prerequisites](#1-prerequisites)
@@ -18,31 +18,37 @@
 - [9. Upgrade and Promotion](#9-upgrade-and-promotion)
 - [10. Rollback](#10-rollback)
 - [11. Restart and Recovery Checks](#11-restart-and-recovery-checks)
+- [12. Operational Costs and Failure Boundaries](#12-operational-costs-and-failure-boundaries)
 
 ---
 
 ## 0. Status and Scope
 
-**Status:** IMPLEMENTED
+**Status:** IMPLEMENTED.
 
-This guide documents commands that exist in the current `Taskfile.yml` and
+This guide documents commands present in the current `Taskfile.yml` and
 resources present in the current Kubernetes manifests. It covers runtime
-infrastructure, not project-specific workflow operations.
+infrastructure rather than project workflow operations.
 
-[Back to top](#navigation)
+**Operator rule:** validate Observed State after every deployment, restart,
+authentication change, or rollback. Pod phase alone is not an acceptance
+signal. Stop promotion when health, model discovery, provider checks, or
+required telemetry fail.
+
+[Back to top](#operations-guide)
 
 ---
 
 ## 1. Prerequisites
 
-Operator workstation requirements:
+Required operator tools are:
 
 - Docker;
 - Minikube;
 - `kubectl`;
 - Task;
 - `jq`;
-- NVIDIA-capable Minikube setup for GPU tiers.
+- NVIDIA-capable Minikube configuration for GPU tiers.
 
 Start the repository's default Minikube profile when required:
 
@@ -50,34 +56,35 @@ Start the repository's default Minikube profile when required:
 task miniup
 ```
 
-`MINIKUBE_PROFILE` may override the profile used by gateway image loading:
+`MINIKUBE_PROFILE` overrides the profile used by gateway image loading:
 
 ```bash
 MINIKUBE_PROFILE=my-profile task gateway:image:build
 ```
 
-[Back to top](#navigation)
+If Minikube, Kubernetes DNS, storage, or GPU exposure is unhealthy, correct
+that failure before applying runtime changes.
+
+[Back to top](#operations-guide)
 
 ---
 
 ## 2. Deployment Lifecycles
 
-The repository deliberately has four separate lifecycles.
+The repository has four independent Desired States.
 
 ### Local inference and runtime contract
+
+Deploy and observe:
 
 ```bash
 task up
 task status
 ```
 
-`task up` applies the root `k8s/` Kustomization. It deploys:
-
-- namespace;
-- Hugging Face Secret manifest;
-- runtime contract ConfigMap;
-- general inference NetworkPolicy;
-- `small`, `medium`, and `large` PVCs, Deployments, and Services.
+`task up` applies the root `k8s/` Kustomization. It includes the namespace,
+Hugging Face Secret manifest, runtime contract ConfigMap, general inference
+NetworkPolicy, and the `small`, `medium`, and `large` resources.
 
 It does **not** deploy the subscription gateway, Prometheus/DCGM, or OCO
 consumer ConfigMaps.
@@ -103,13 +110,16 @@ task oco-consumer:deploy
 task oco-consumer:status
 ```
 
-Convenience path for gateway telemetry plus OCO publication:
+Gateway telemetry and OCO publication can be reconciled together with:
 
 ```bash
 task gateway:observability:deploy
 ```
 
-[Back to top](#navigation)
+The operator decides which lifecycle to reconcile. Applying one lifecycle does
+not imply success of another.
+
+[Back to top](#operations-guide)
 
 ---
 
@@ -155,7 +165,7 @@ task llm:benchmark-medium
 task llm:benchmark-large
 ```
 
-Startup diagnostics:
+Collect startup diagnostics when readiness does not converge:
 
 ```bash
 task llm:diagnose-startup-small
@@ -163,7 +173,10 @@ task llm:diagnose-startup-medium
 task llm:diagnose-startup-large
 ```
 
-[Back to top](#navigation)
+A failed model listing, health check, smoke test, or required metrics check
+means the tier is not accepted as healthy.
+
+[Back to top](#operations-guide)
 
 ---
 
@@ -171,23 +184,28 @@ task llm:diagnose-startup-large
 
 ### Repository verification
 
+Run:
+
 ```bash
 task gateway:verify
 ```
 
-This runs `npm ci --ignore-scripts` and the gateway package's verification
-script, including TypeScript checks/build and unit tests.
+`gateway:verify` installs the locked package dependencies with scripts disabled
+and runs the gateway package verification target, including TypeScript checks,
+build, and unit tests.
 
 ### Local Minikube image
+
+Build into the selected Minikube Docker daemon:
 
 ```bash
 task gateway:image:build
 ```
 
-The task builds `llm-runtime-gateway:dev` inside the selected Minikube Docker
-daemon unless `LLM_GATEWAY_IMAGE` overrides the image value.
+The default image reference is `llm-runtime-gateway:dev` unless
+`LLM_GATEWAY_IMAGE` overrides it.
 
-A normal Docker-daemon build is also available:
+A build in the current Docker daemon is available through:
 
 ```bash
 task gateway:image:build:docker
@@ -201,22 +219,24 @@ GitHub Actions publishes trusted builds to:
 ghcr.io/homel-dev/llm-runtime-gateway
 ```
 
-Production-like promotion should use the image digest emitted by the workflow:
+Promote an immutable digest emitted by the workflow:
 
 ```bash
 LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
   task gateway:deploy
 ```
 
-The Deployment references `ghcr-pull-secret`. Create it in `llm-runtime` before
-pulling a private package.
+The Deployment references `ghcr-pull-secret`. The Secret must exist in
+`llm-runtime` before Kubernetes can pull a private package.
 
-`gateway:deploy` reapplies `k8s/networkpolicy.yml` before applying gateway
-resources. This is required during migration because Kubernetes NetworkPolicy
-rules are additive and the older broad selector would otherwise continue to
-permit unintended gateway ingress.
+`gateway:deploy` reapplies `k8s/networkpolicy.yml` before gateway resources.
+This migration ordering matters because Kubernetes NetworkPolicy rules are
+additive; retaining the older broad selector would preserve unintended gateway
+ingress.
 
-[Back to top](#navigation)
+Failure of image pull, rollout, or post-deploy validation stops promotion.
+
+[Back to top](#operations-guide)
 
 ---
 
@@ -226,47 +246,54 @@ Authentication state is persisted independently of gateway Pods.
 
 ### ChatGPT/Codex
 
+Populate or refresh account state with:
+
 ```bash
 task gateway:subscription:login
 ```
 
-The helper creates/uses PVC `rr-openai-subscription-auth`, runs the interactive
-`openai-oauth` login flow, and verifies that `/auth/auth.json` was persisted.
+The helper uses PVC `rr-openai-subscription-auth`, executes interactive
+`openai-oauth` authentication, and verifies that `/auth/auth.json` was
+persisted.
 
 ### Google AI
+
+Populate or refresh account state with:
 
 ```bash
 task gateway:gemini:login
 ```
 
-The helper creates/uses PVC `rr-gemini-subscription-auth`, runs interactive
-Antigravity account authentication, then performs a non-interactive
-`gemini-3.1-pro-high` verification prompt against the cached account state.
+The helper uses PVC `rr-gemini-subscription-auth`, executes interactive
+Antigravity account authentication, and then runs a non-interactive
+`gemini-3.1-pro-high` verification prompt against cached account state.
 
-The legacy `rr-*` PVC names are retained to preserve existing credential state
-during ownership migration from RR. They are runtime-owned resources now.
+The legacy `rr-*` PVC names preserve credential state across ownership
+migration; they are runtime-owned resources.
 
-Run these tasks when the PVC is new or cached credentials have expired.
+Authentication is accepted only when the helper's verification succeeds.
+Expired credentials, quota failure, or provider rejection remain explicit
+failures.
 
-[Back to top](#navigation)
+[Back to top](#operations-guide)
 
 ---
 
 ## 6. Gateway Validation
 
-Show Deployment, Service, auth PVCs, and advertised models:
+Inspect Deployment, Service, auth PVCs, and advertised models:
 
 ```bash
 task gateway:status
 ```
 
-Follow all gateway containers:
+Follow gateway containers:
 
 ```bash
 task gateway:logs
 ```
 
-Fetch raw gateway metrics from local metrics port 9091:
+Fetch raw gateway metrics:
 
 ```bash
 task gateway:metrics
@@ -278,15 +305,16 @@ Run the end-to-end Google AI subscription check:
 task gateway:gemini:check
 ```
 
-This sends an OpenAI Chat Completions request to the gateway router. The router
-selects the Antigravity adapter over Pod loopback, and the adapter invokes the
-cached Google AI subscription. The script fails if the expected marker is not
+The end-to-end check sends an OpenAI Chat Completions request to the router,
+selects the Antigravity adapter over Pod loopback, and invokes the cached Google
+AI subscription. The task exits non-zero unless the expected marker is
 returned.
 
-A passing unit suite or healthy Pod is not equivalent to a passing subscription
-smoke check. Provider auth/quota failures require the end-to-end check.
+A passing unit suite, ready Pod, or successful `/v1/models` response does not
+prove provider authentication, quota, or inference availability. Provider
+acceptance requires an end-to-end check.
 
-[Back to top](#navigation)
+[Back to top](#operations-guide)
 
 ---
 
@@ -298,10 +326,10 @@ Deploy Prometheus and DCGM exporter:
 task observability:deploy
 ```
 
-The task reapplies the ConfigMap and restarts Prometheus so changed scrape jobs
-are loaded.
+The task reapplies the Prometheus ConfigMap and restarts Prometheus so changed
+scrape configuration is loaded.
 
-Inspect targets:
+Inspect targets and health:
 
 ```bash
 task observability:targets
@@ -318,15 +346,12 @@ task oco-consumer:deploy
 task oco-consumer:status
 ```
 
-Current published dashboards include:
+Published dashboards include `LLM Runtime` and `LLM Runtime Gateway`
+(`uid=llm-runtime-gateway`). Gateway panels expose health, request rate, p95
+latency, errors and timeouts, last-success age, policy rejects, and process
+memory.
 
-- `LLM Runtime`;
-- `LLM Runtime Gateway` (`uid=llm-runtime-gateway`).
-
-The gateway dashboard covers health, traffic, p95 latency, errors/timeouts,
-last-success age, policy rejects, and process memory.
-
-Expose Prometheus to the host/LAN when needed:
+Expose Prometheus to the host or LAN when required:
 
 ```bash
 task observability:expose-start
@@ -334,13 +359,16 @@ task observability:expose-status
 task observability:urls
 ```
 
-Stop the proxy with:
+Stop the exposure proxy with:
 
 ```bash
 task observability:expose-stop
 ```
 
-[Back to top](#navigation)
+Missing targets, stale success timestamps, or increasing timeout/error counters
+are operational failures and require investigation before accepting a change.
+
+[Back to top](#operations-guide)
 
 ---
 
@@ -348,23 +376,30 @@ task observability:expose-stop
 
 ### Local tier unavailable
 
+Collect Kubernetes state first:
+
 ```bash
 kubectl -n llm-runtime get pods,svc,pvc
 kubectl -n llm-runtime describe pod <pod>
 kubectl -n llm-runtime logs <pod>
 ```
 
-Then use the tier-specific startup diagnostic task.
+Then run the tier-specific startup diagnostic task.
 
 Check:
 
-- model/cache availability;
-- GPU availability for medium/large;
+- model or cache availability;
+- GPU availability for medium and large tiers;
 - memory pressure;
-- readiness failures;
+- readiness failure;
 - container restart reason.
 
+Do not change consumer routing until the infrastructure failure is identified
+or a consumer-owned fallback decision is made explicitly.
+
 ### Gateway unavailable
+
+Collect:
 
 ```bash
 task gateway:status
@@ -372,39 +407,41 @@ task gateway:logs
 task observability:gateway-target
 ```
 
-Distinguish:
+Distinguish these failure classes:
 
-1. router/Pod failure;
-2. provider sidecar failure;
+1. router or Pod failure;
+2. provider transport failure;
 3. expired subscription authentication;
-4. provider quota/service failure;
-5. NetworkPolicy/connectivity failure.
+4. provider quota or service failure;
+5. NetworkPolicy or connectivity failure.
 
-`/v1/models` readiness proves only that the router is serving. It does not prove
-that either external subscription can complete an inference request.
+`/v1/models` proves router availability only. It does not prove that an external
+subscription can complete inference.
 
-### Gateway latency/error increase
+### Gateway latency or error increase
 
-Use:
+Collect:
 
 ```bash
 task gateway:metrics
 task observability:gateway-up
 ```
 
-Review request-duration histogram, status counters, transport errors/timeouts,
-in-flight requests, and last-success/error timestamps in Prometheus/OCO.
+Review request-duration histograms, status counters, transport errors and
+timeouts, in-flight requests, and last-success/error timestamps.
 
 ### Prometheus target missing
+
+Collect:
 
 ```bash
 task observability:targets
 task observability:logs-prometheus
 ```
 
-Verify the Service port, NetworkPolicy, and loaded Prometheus ConfigMap.
+Verify Service ports, NetworkPolicy, and the loaded Prometheus ConfigMap.
 
-[Back to top](#navigation)
+[Back to top](#operations-guide)
 
 ---
 
@@ -412,41 +449,46 @@ Verify the Service port, NetworkPolicy, and loaded Prometheus ConfigMap.
 
 ### Local tiers
 
-1. change manifest implementation;
-2. `task up`;
+1. change the manifest implementation;
+2. run `task up`;
 3. wait for readiness;
-4. run `llm:list-*`, health, metrics, and smoke tasks;
+4. run model discovery, health, metrics, and smoke checks;
 5. observe Prometheus before accepting the change.
+
+If validation fails, stop and use section 10.
 
 ### Gateway
 
-1. change gateway source/manifests;
-2. `task gateway:verify`;
+1. change gateway source or manifests;
+2. run `task gateway:verify`;
 3. allow GitHub Actions to build the `linux/amd64` image;
-4. promote the exact GHCR digest;
-5. `task gateway:deploy`;
-6. `task gateway:status`;
+4. select the exact GHCR digest;
+5. deploy that digest;
+6. inspect gateway status;
 7. run provider-specific end-to-end checks;
-8. validate `observability:gateway-target` and dashboard signals.
+8. validate Prometheus target health and OCO signals.
 
 PR jobs build but cannot publish. Registry write permission exists only on the
 trusted publish job for non-PR events.
 
-[Back to top](#navigation)
+If rollout, provider validation, or required telemetry fails, stop promotion and
+rollback.
+
+[Back to top](#operations-guide)
 
 ---
 
 ## 10. Rollback
 
-Prefer rollback by known-good immutable gateway digest rather than rebuilding an
-older git commit:
+For the gateway, deploy a known-good immutable digest rather than rebuilding an
+older commit:
 
 ```bash
 LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<known-good>' \
   task gateway:deploy
 ```
 
-Then validate:
+Validate the rollback:
 
 ```bash
 task gateway:status
@@ -461,19 +503,21 @@ git revert <change>
 task up
 ```
 
-Then rerun tier health/smoke checks.
+Then rerun tier model discovery, health, metrics, and smoke checks.
 
-Subscription PVCs are preserved by `task gateway:delete`; deleting a gateway
-Deployment is therefore not an authentication reset.
+Subscription PVCs are preserved by `task gateway:delete`; deleting the gateway
+Deployment is not an authentication reset.
 
-[Back to top](#navigation)
+A rollback is complete only when Observed State matches the selected known-good
+Desired State and required validation passes.
+
+[Back to top](#operations-guide)
 
 ---
 
 ## 11. Restart and Recovery Checks
 
-After a Minikube or host restart, do not infer recovery from Pod phase alone.
-Check each lifecycle explicitly:
+After a Minikube or host restart, inspect each lifecycle independently:
 
 ```bash
 task status
@@ -482,7 +526,7 @@ task observability:status
 task oco-consumer:status
 ```
 
-Then validate actual service behavior:
+Then validate behavior:
 
 ```bash
 task llm:health-small
@@ -493,9 +537,35 @@ task observability:vllm-up
 task observability:gateway-up
 ```
 
-The root `task up` cannot recreate gateway/observability/OCO resources because
-they are intentionally outside the root Kustomization. If those resources are
-not already persisted in the Minikube cluster, run their explicit deploy tasks.
+The root `task up` cannot recreate gateway, observability, or OCO resources
+because those resources are outside the root Kustomization. If they are absent,
+reconcile their explicit lifecycles.
+
+Do not mark recovery complete from Pod phase alone.
+
+[Back to top](#operations-guide)
+
+---
+
+## 12. Operational Costs and Failure Boundaries
+
+The separated lifecycle model has an operator cost: runtime, gateway,
+observability, and OCO Desired State may require independent reconciliation.
+That separation prevents one deployment command from mutating unrelated
+resources, but recovery requires checking each lifecycle.
+
+Subscription-backed providers add an external dependency that local health
+checks cannot validate. End-to-end provider checks consume provider traffic and
+must be run deliberately when authentication or provider availability matters.
+
+Prometheus telemetry is passive. A credential can expire during an idle period
+without producing a provider failure signal until traffic or an explicit check
+uses that credential.
+
+Operational tooling reports and validates infrastructure state. It does not
+choose consumer fallback policy.
+
+[Back to top](#operations-guide)
 
 ---
 
