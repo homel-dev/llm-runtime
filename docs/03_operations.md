@@ -1,4 +1,3 @@
-docs/03_operations.md
 # OPERATIONS GUIDE
 ## Deployment, Validation, and Runtime Operations
 ### Operational Procedures Specification
@@ -7,227 +6,339 @@ docs/03_operations.md
 
 ## Navigation
 
-- [0. Status, Scope, and Authority](#0-status-scope-and-authority)
-- [1. Purpose](#1-purpose)
-- [2. Operational Principles](#2-operational-principles)
-- [3. Runtime Deployment](#3-runtime-deployment)
-- [4. Runtime Validation](#4-runtime-validation)
-- [5. Runtime Health Checks](#5-runtime-health-checks)
-- [6. Runtime Metrics and OCO Presentation](#6-runtime-metrics-and-oco-presentation)
-- [7. Capacity Monitoring](#7-capacity-monitoring)
+- [0. Status and Scope](#0-status-and-scope)
+- [1. Prerequisites](#1-prerequisites)
+- [2. Deployment Lifecycles](#2-deployment-lifecycles)
+- [3. Local Inference Validation](#3-local-inference-validation)
+- [4. Gateway Build and Deployment](#4-gateway-build-and-deployment)
+- [5. Subscription Authentication](#5-subscription-authentication)
+- [6. Gateway Validation](#6-gateway-validation)
+- [7. Observability and OCO](#7-observability-and-oco)
 - [8. Incident Response](#8-incident-response)
-- [9. Runtime Upgrades](#9-runtime-upgrades)
-- [10. Runtime Rollback](#10-runtime-rollback)
-- [11. Architectural Boundaries](#11-architectural-boundaries)
-- [12. Closing Statement](#12-closing-statement)
+- [9. Upgrade and Promotion](#9-upgrade-and-promotion)
+- [10. Rollback](#10-rollback)
+- [11. Restart and Recovery Checks](#11-restart-and-recovery-checks)
 
 ---
 
-## 0. Status, Scope, and Authority
+## 0. Status and Scope
 
-**Status:** FOUNDATIONAL
+**Status:** IMPLEMENTED
 
-**Audience:**
-- Platform operators
-- Runtime maintainers
-- Infrastructure contributors
-
-**Change policy:**
-- Append-only
-- No silent edits
-
-This document defines operational procedures for LLM Runtime.
-
-This document focuses on runtime infrastructure.
-
-This document does not define application-specific operational procedures.
+This guide documents commands that exist in the current `Taskfile.yml` and
+resources present in the current Kubernetes manifests. It covers runtime
+infrastructure, not project-specific workflow operations.
 
 [Back to top](#navigation)
 
 ---
 
-## 1. Purpose
+## 1. Prerequisites
 
-The purpose of this document is to define repeatable operational procedures for:
+Operator workstation requirements:
 
-- deployment
-- validation
-- monitoring
-- troubleshooting
-- upgrades
-- rollback
+- Docker;
+- Minikube;
+- `kubectl`;
+- Task;
+- `jq`;
+- NVIDIA-capable Minikube setup for GPU tiers.
 
-The objective is operational consistency.
+Start the repository's default Minikube profile when required:
+
+```bash
+task miniup
+```
+
+`MINIKUBE_PROFILE` may override the profile used by gateway image loading:
+
+```bash
+MINIKUBE_PROFILE=my-profile task gateway:image:build
+```
 
 [Back to top](#navigation)
 
 ---
 
-## 2. Operational Principles
+## 2. Deployment Lifecycles
 
-### Infrastructure First
+The repository deliberately has four separate lifecycles.
 
-Runtime health should be evaluated independently from project-specific behavior.
+### Local inference and runtime contract
 
-### Observable Systems
+```bash
+task up
+task status
+```
 
-Operational decisions should be based on observed data.
+`task up` applies the root `k8s/` Kustomization. It deploys:
 
-### Conservative Change Management
+- namespace;
+- Hugging Face Secret manifest;
+- runtime contract ConfigMap;
+- general inference NetworkPolicy;
+- `small`, `medium`, and `large` PVCs, Deployments, and Services.
 
-Runtime changes should be incremental and observable.
+It does **not** deploy the subscription gateway, Prometheus/DCGM, or OCO
+consumer ConfigMaps.
 
-### Stable Contracts
+### Subscription gateway
 
-Runtime contracts should remain stable during operational changes whenever practical.
+```bash
+task gateway:deploy
+task gateway:status
+```
+
+### Runtime metrics
+
+```bash
+task observability:deploy
+task observability:status
+```
+
+### OCO/Grafana consumer contract
+
+```bash
+task oco-consumer:deploy
+task oco-consumer:status
+```
+
+Convenience path for gateway telemetry plus OCO publication:
+
+```bash
+task gateway:observability:deploy
+```
 
 [Back to top](#navigation)
 
 ---
 
-## 3. Runtime Deployment
+## 3. Local Inference Validation
 
-Deploy runtime infrastructure:
-
-```bash
-task deploy
-```
-
-Validate namespace creation:
+List advertised models through cluster DNS:
 
 ```bash
-kubectl get namespace llm-runtime
+task llm:list-small
+task llm:list-medium
+task llm:list-large
 ```
 
-Validate runtime resources:
+Run health checks:
 
 ```bash
-kubectl -n llm-runtime get all
+task llm:health-small
+task llm:health-medium
+task llm:health-large
 ```
 
-Expected resources include:
+Verify metrics endpoints:
+
+```bash
+task llm:metrics-small
+task llm:metrics-medium
+task llm:metrics-large
+```
+
+Run chat smoke tests:
+
+```bash
+task llm:smoke-small
+task llm:smoke-medium
+task llm:smoke-large
+```
+
+Benchmark through cluster DNS when capacity data is required:
+
+```bash
+task llm:benchmark-small
+task llm:benchmark-medium
+task llm:benchmark-large
+```
+
+Startup diagnostics:
+
+```bash
+task llm:diagnose-startup-small
+task llm:diagnose-startup-medium
+task llm:diagnose-startup-large
+```
+
+[Back to top](#navigation)
+
+---
+
+## 4. Gateway Build and Deployment
+
+### Repository verification
+
+```bash
+task gateway:verify
+```
+
+This runs `npm ci --ignore-scripts` and the gateway package's verification
+script, including TypeScript checks/build and unit tests.
+
+### Local Minikube image
+
+```bash
+task gateway:image:build
+```
+
+The task builds `llm-runtime-gateway:dev` inside the selected Minikube Docker
+daemon unless `LLM_GATEWAY_IMAGE` overrides the image value.
+
+A normal Docker-daemon build is also available:
+
+```bash
+task gateway:image:build:docker
+```
+
+### CI image
+
+GitHub Actions publishes trusted builds to:
 
 ```text
-llm-small
-llm-medium
-llm-large
+ghcr.io/homel-dev/llm-runtime-gateway
 ```
+
+Production-like promotion should use the image digest emitted by the workflow:
+
+```bash
+LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
+  task gateway:deploy
+```
+
+The Deployment references `ghcr-pull-secret`. Create it in `llm-runtime` before
+pulling a private package.
+
+`gateway:deploy` reapplies `k8s/networkpolicy.yml` before applying gateway
+resources. This is required during migration because Kubernetes NetworkPolicy
+rules are additive and the older broad selector would otherwise continue to
+permit unintended gateway ingress.
 
 [Back to top](#navigation)
 
 ---
 
-## 4. Runtime Validation
+## 5. Subscription Authentication
 
-After deployment, validate service availability.
+Authentication state is persisted independently of gateway Pods.
 
-List services:
-
-```bash
-kubectl -n llm-runtime get svc
-```
-
-Expected services:
-
-```text
-llm-small
-llm-medium
-llm-large
-```
-
-Validate runtime endpoints:
+### ChatGPT/Codex
 
 ```bash
-task list-small
-task list-medium
-task list-large
+task gateway:subscription:login
 ```
 
-Successful model enumeration indicates endpoint availability.
+The helper creates/uses PVC `rr-openai-subscription-auth`, runs the interactive
+`openai-oauth` login flow, and verifies that `/auth/auth.json` was persisted.
+
+### Google AI
+
+```bash
+task gateway:gemini:login
+```
+
+The helper creates/uses PVC `rr-gemini-subscription-auth`, runs interactive
+Antigravity account authentication, then performs a non-interactive
+`gemini-3.1-pro-high` verification prompt against the cached account state.
+
+The legacy `rr-*` PVC names are retained to preserve existing credential state
+during ownership migration from RR. They are runtime-owned resources now.
+
+Run these tasks when the PVC is new or cached credentials have expired.
 
 [Back to top](#navigation)
 
 ---
 
-## 5. Runtime Health Checks
+## 6. Gateway Validation
 
-Runtime services should expose OpenAI-compatible endpoints.
-
-Basic health validation:
+Show Deployment, Service, auth PVCs, and advertised models:
 
 ```bash
-curl http://localhost:8000/v1/models
+task gateway:status
 ```
 
-Smoke-test validation:
+Follow all gateway containers:
 
 ```bash
-task smoke-small
-task smoke-medium
-task smoke-large
+task gateway:logs
 ```
 
-Expected outcome:
+Fetch raw gateway metrics from local metrics port 9091:
 
-```text
-Successful request completion
+```bash
+task gateway:metrics
 ```
 
-Health validation should occur after:
+Run the end-to-end Google AI subscription check:
 
-- deployment
-- restart
-- upgrade
-- rollback
+```bash
+task gateway:gemini:check
+```
+
+This sends an OpenAI Chat Completions request to the gateway router. The router
+selects the Antigravity adapter over Pod loopback, and the adapter invokes the
+cached Google AI subscription. The script fails if the expected marker is not
+returned.
+
+A passing unit suite or healthy Pod is not equivalent to a passing subscription
+smoke check. Provider auth/quota failures require the end-to-end check.
 
 [Back to top](#navigation)
 
 ---
 
-## 6. Runtime Metrics and OCO Presentation
+## 7. Observability and OCO
 
-Runtime metrics focus on infrastructure behavior. Prometheus and DCGM exporter remain runtime-owned; Grafana presentation is loaded by OCO from this repository's consumer ConfigMaps.
+Deploy Prometheus and DCGM exporter:
 
-Examples:
+```bash
+task observability:deploy
+```
 
-- GPU utilization
-- GPU memory usage
-- request latency
-- request throughput
-- queue depth
-- timeout rate
-- error rate
-- pod restart count
+The task reapplies the ConfigMap and restarts Prometheus so changed scrape jobs
+are loaded.
 
-These metrics support runtime capacity planning.
+Inspect targets:
 
-Project-specific effectiveness metrics belong to consumer projects. The llm-runtime Grafana dashboard and datasource are published as OCO consumer ConfigMaps under k8s/oco-consumer/.
+```bash
+task observability:targets
+task observability:vllm-targets
+task observability:vllm-up
+task observability:gateway-target
+task observability:gateway-up
+```
 
-[Back to top](#navigation)
+Publish OCO/Grafana datasource and dashboards:
 
----
+```bash
+task oco-consumer:deploy
+task oco-consumer:status
+```
 
-## 7. Capacity Monitoring
+Current published dashboards include:
 
-Runtime capacity should be monitored continuously.
+- `LLM Runtime`;
+- `LLM Runtime Gateway` (`uid=llm-runtime-gateway`).
 
-Indicators of insufficient capacity may include:
+The gateway dashboard covers health, traffic, p95 latency, errors/timeouts,
+last-success age, policy rejects, and process memory.
 
-- sustained queue growth
-- latency increase
-- timeout increase
-- request rejection
-- degraded throughput
+Expose Prometheus to the host/LAN when needed:
 
-Potential responses include:
+```bash
+task observability:expose-start
+task observability:expose-status
+task observability:urls
+```
 
-- increasing runtime capacity
-- adding additional GPUs
-- introducing additional tiers
-- deploying dedicated replicas
-- applying concurrency controls
+Stop the proxy with:
 
-Capacity changes should be driven by observed behavior.
+```bash
+task observability:expose-stop
+```
 
 [Back to top](#navigation)
 
@@ -235,139 +346,156 @@ Capacity changes should be driven by observed behavior.
 
 ## 8. Incident Response
 
-Illustrative runtime incidents:
-
-### Service Unavailable
-
-Symptoms:
-
-```text
-Connection failures
-Request failures
-```
-
-Initial actions:
+### Local tier unavailable
 
 ```bash
-kubectl -n llm-runtime get pods
+kubectl -n llm-runtime get pods,svc,pvc
 kubectl -n llm-runtime describe pod <pod>
 kubectl -n llm-runtime logs <pod>
 ```
 
-### High Latency
+Then use the tier-specific startup diagnostic task.
 
-Symptoms:
+Check:
 
-```text
-Increased response times
-Queue growth
-```
+- model/cache availability;
+- GPU availability for medium/large;
+- memory pressure;
+- readiness failures;
+- container restart reason.
 
-Initial actions:
-
-```text
-Review runtime metrics
-Review GPU utilization
-Review request volume
-```
-
-### Model Startup Failure
-
-Symptoms:
-
-```text
-Pod restart loop
-Readiness probe failures
-```
-
-Initial actions:
+### Gateway unavailable
 
 ```bash
-kubectl -n llm-runtime logs <pod>
+task gateway:status
+task gateway:logs
+task observability:gateway-target
 ```
 
-Review:
+Distinguish:
 
-- model download status
-- storage availability
-- GPU availability
+1. router/Pod failure;
+2. provider sidecar failure;
+3. expired subscription authentication;
+4. provider quota/service failure;
+5. NetworkPolicy/connectivity failure.
+
+`/v1/models` readiness proves only that the router is serving. It does not prove
+that either external subscription can complete an inference request.
+
+### Gateway latency/error increase
+
+Use:
+
+```bash
+task gateway:metrics
+task observability:gateway-up
+```
+
+Review request-duration histogram, status counters, transport errors/timeouts,
+in-flight requests, and last-success/error timestamps in Prometheus/OCO.
+
+### Prometheus target missing
+
+```bash
+task observability:targets
+task observability:logs-prometheus
+```
+
+Verify the Service port, NetworkPolicy, and loaded Prometheus ConfigMap.
 
 [Back to top](#navigation)
 
 ---
 
-## 9. Runtime Upgrades
+## 9. Upgrade and Promotion
 
-Runtime upgrades should be incremental.
+### Local tiers
 
-Recommended process:
+1. change manifest implementation;
+2. `task up`;
+3. wait for readiness;
+4. run `llm:list-*`, health, metrics, and smoke tasks;
+5. observe Prometheus before accepting the change.
 
-1. update manifests
-2. deploy updated resources
-3. validate endpoint availability
-4. execute smoke tests
-5. observe runtime metrics
-6. validate consumer connectivity
+### Gateway
 
-Upgrades should preserve runtime contracts whenever practical.
+1. change gateway source/manifests;
+2. `task gateway:verify`;
+3. allow GitHub Actions to build the `linux/amd64` image;
+4. promote the exact GHCR digest;
+5. `task gateway:deploy`;
+6. `task gateway:status`;
+7. run provider-specific end-to-end checks;
+8. validate `observability:gateway-target` and dashboard signals.
+
+PR jobs build but cannot publish. Registry write permission exists only on the
+trusted publish job for non-PR events.
 
 [Back to top](#navigation)
 
 ---
 
-## 10. Runtime Rollback
+## 10. Rollback
 
-Rollback should be available for all runtime changes.
+Prefer rollback by known-good immutable gateway digest rather than rebuilding an
+older git commit:
 
-Illustrative rollback process:
+```bash
+LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<known-good>' \
+  task gateway:deploy
+```
+
+Then validate:
+
+```bash
+task gateway:status
+task gateway:gemini:check
+task observability:gateway-up
+```
+
+For local tiers, revert the manifest change and reapply:
 
 ```bash
 git revert <change>
-task deploy
+task up
 ```
 
-Post-rollback validation:
+Then rerun tier health/smoke checks.
+
+Subscription PVCs are preserved by `task gateway:delete`; deleting a gateway
+Deployment is therefore not an authentication reset.
+
+[Back to top](#navigation)
+
+---
+
+## 11. Restart and Recovery Checks
+
+After a Minikube or host restart, do not infer recovery from Pod phase alone.
+Check each lifecycle explicitly:
 
 ```bash
-task list-small
-task list-medium
-task list-large
-
-task smoke-small
-task smoke-medium
-task smoke-large
+task status
+task gateway:status
+task observability:status
+task oco-consumer:status
 ```
 
-Rollback success requires restoration of runtime availability.
+Then validate actual service behavior:
 
-[Back to top](#navigation)
+```bash
+task llm:health-small
+task llm:health-medium
+task llm:health-large
+task gateway:gemini:check
+task observability:vllm-up
+task observability:gateway-up
+```
 
----
-
-## 11. Architectural Boundaries
-
-This document does not define:
-
-- project prompts
-- project schemas
-- project workflows
-- project authority models
-- project persistence
-- project-specific quality metrics
-
-This document defines runtime operational procedures only.
-
-[Back to top](#navigation)
-
----
-
-## 12. Closing Statement
-
-The purpose of runtime operations is maintaining stable and observable inference infrastructure.
-
-Operational procedures should focus on infrastructure behavior rather than project-specific semantics.
-
-Runtime reliability, observability, and capacity management remain the primary operational objectives.
+The root `task up` cannot recreate gateway/observability/OCO resources because
+they are intentionally outside the root Kustomization. If those resources are
+not already persisted in the Minikube cluster, run their explicit deploy tasks.
 
 ---
 
