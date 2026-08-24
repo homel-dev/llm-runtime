@@ -14,8 +14,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 USER node
 ENV HOME=/home/node
-RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases --skip-path \
- && "$HOME/.local/bin/agy" --version
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash \
+  && "$HOME/.local/bin/agy" --version
 
 FROM node:24-bookworm-slim
 ARG OPENAI_OAUTH_VERSION=2.0.0
