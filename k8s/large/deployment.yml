@@ -33,15 +33,17 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - casperhansen/deepseek-r1-distill-llama-70b-awq
+            - Qwen/Qwen2.5-72B-Instruct-AWQ
             - --host
             - "0.0.0.0"
             - --port
             - "8000"
             - --served-model-name
-            - DeepSeek-R1-Distill-Llama-70B-AWQ
+            - Qwen2.5-72B-Instruct-AWQ
             - --quantization
             - awq
+            - --dtype
+            - float16
             - --tensor-parallel-size
             - "1"
             - --pipeline-parallel-size
@@ -51,8 +53,11 @@ spec:
             - --gpu-memory-utilization
             - "0.92"
             - --max-num-seqs
-            - "1"
+            - "16"
             - --enforce-eager
+            - --no-async-scheduling
+            - --structured-outputs-config.backend
+            - xgrammar
 
           env:
             - name: HF_HOME
