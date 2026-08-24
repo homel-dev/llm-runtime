@@ -1,159 +1,167 @@
-docs/02_runtime_contract.md
 # RUNTIME CONTRACT
-## Shared Runtime Service Contract
-### Infrastructure Contract Specification
+
+*Shared runtime service contract — infrastructure contract specification.*
 
 ---
 
-## Navigation
+## Table of Contents
 
-- [0. Status, Scope, and Authority](#0-status-scope-and-authority)
+- [0. Status and Authority](#0-status-and-authority)
 - [1. Purpose](#1-purpose)
-- [2. Contract Philosophy](#2-contract-philosophy)
-- [3. Contract Stability Rules](#3-contract-stability-rules)
-- [4. Service Endpoints](#4-service-endpoints)
-- [5. API Compatibility](#5-api-compatibility)
+- [2. Stable Contract](#2-stable-contract)
+- [3. Service Endpoints](#3-service-endpoints)
+- [4. API Compatibility](#4-api-compatibility)
+- [5. Gateway Model Contract](#5-gateway-model-contract)
 - [6. Consumer Responsibilities](#6-consumer-responsibilities)
 - [7. Runtime Responsibilities](#7-runtime-responsibilities)
-- [8. Configuration Model](#8-configuration-model)
-- [9. Versioning Policy](#9-versioning-policy)
-- [10. Architectural Boundaries](#10-architectural-boundaries)
-- [11. Closing Statement](#11-closing-statement)
+- [8. ConfigMap Contract](#8-configmap-contract)
+- [9. Versioning and Change Rules](#9-versioning-and-change-rules)
+- [10. Non-Contract Implementation Details](#10-non-contract-implementation-details)
+- [11. Tradeoffs and Failure Behavior](#11-tradeoffs-and-failure-behavior)
 
 ---
 
-## 0. Status, Scope, and Authority
+## 0. Status and Authority
 
-**Status:** FOUNDATIONAL
+**Status:** IMPLEMENTED.
 
-**Audience:**
-- Runtime contributors
-- Platform contributors
-- Consumer project maintainers
+**Contract version:** `v1`.
 
-**Change policy:**
-- Append-only
-- No silent edits
+`k8s/runtime-contract.yml`, Kubernetes Services, and the gateway's advertised
+model list are executable sources of truth for this contract.
 
-This document defines the runtime service contract exposed by the LLM Runtime platform.
+`llm-runtime` owns the runtime side of the contract. Consumers decide how and
+when to use the exposed interfaces. A consumer cannot alter provider credential
+handling or runtime network policy through this contract.
 
-[Back to top](#navigation)
+Contract violation is enforced by failure: missing Services, missing contract
+keys, unavailable model IDs, or unsupported API behavior must be treated as
+runtime/contract failures rather than inferred away by consumers.
+
+[Back to top](#runtime-contract)
 
 ---
 
 ## 1. Purpose
 
-Consumer projects require a stable mechanism for accessing shared inference services.
+Consumer projects require stable service discovery without depending on model
+server topology or provider credential mechanics.
 
-The purpose of this contract is to define:
+This contract defines:
 
-- service discovery
-- endpoint stability
-- API compatibility expectations
-- ownership boundaries
+- namespace and Service endpoints;
+- OpenAI API compatibility expectations;
+- gateway model IDs intended for consumers;
+- runtime and consumer ownership boundaries;
+- compatible and breaking contract evolution.
 
-The contract intentionally remains minimal.
-
-[Back to top](#navigation)
-
----
-
-## 2. Contract Philosophy
-
-The runtime contract should expose only information required to consume inference services.
-
-The runtime contract should avoid exposing deployment implementation details.
-
-Examples of implementation details:
-
-- model names
-- quantization strategy
-- GPU allocation
-- batching configuration
-- container topology
-
-Consumer projects should not depend on implementation details.
-
-Consumer projects should depend only on stable runtime interfaces.
-
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
-## 3. Contract Stability Rules
+## 2. Stable Contract
 
-The following items are considered stable:
+Stable fields in contract version `v1` are:
 
-- namespace name
-- service names
-- API compatibility
-- endpoint structure
+- namespace: `llm-runtime`;
+- local Service names: `llm-small`, `llm-medium`, `llm-large`;
+- trusted gateway Service name: `llm-openai-api-gateway`;
+- service HTTP port: `8000`;
+- API compatibility declaration: `openai`;
+- ConfigMap keys listed in section 8.
 
-The following items are not considered stable:
+Gateway model IDs are consumer-facing interfaces. Removing an advertised model
+ID or changing its documented meaning is a contract change even when the
+underlying provider implementation changes.
 
-- deployed model
-- model version
-- quantization method
-- deployment topology
-- runtime implementation details
-
-Consumer projects must not assume implementation stability.
-
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
-## 4. Service Endpoints
+## 3. Service Endpoints
 
-The runtime publishes three initial capacity tiers.
-
-### Small Tier
+### Local tiers
 
 ```text
 http://llm-small.llm-runtime.svc.cluster.local:8000
-```
-
-### Medium Tier
-
-```text
 http://llm-medium.llm-runtime.svc.cluster.local:8000
-```
-
-### Large Tier
-
-```text
 http://llm-large.llm-runtime.svc.cluster.local:8000
 ```
 
-The endpoint names are part of the runtime contract.
+### Trusted subscription gateway
 
-Consumers should treat these endpoints as stable.
+```text
+http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
+```
 
-[Back to top](#navigation)
+Consumers use Kubernetes Service discovery rather than Pod IPs.
+
+The gateway exposes TCP/9091 for Prometheus metrics. That port is an operations
+interface, not a general consumer API; gateway NetworkPolicy permits it only
+from runtime Prometheus.
+
+[Back to top](#runtime-contract)
 
 ---
 
-## 5. API Compatibility
+## 4. API Compatibility
 
-Runtime services expose OpenAI-compatible APIs.
+Local model servers and the trusted gateway expose OpenAI-compatible HTTP APIs.
 
-Illustrative endpoints:
+The expected discovery endpoint is:
 
 ```text
-GET  /v1/models
-
-POST /v1/chat/completions
-
-POST /v1/completions
-
-POST /v1/embeddings
+GET /v1/models
 ```
 
-Actual endpoint availability depends on deployed runtime capabilities.
+Chat-oriented consumers use:
 
-OpenAI compatibility is the primary interoperability goal.
+```text
+POST /v1/chat/completions
+```
 
-[Back to top](#navigation)
+Endpoint support beyond those interfaces depends on the selected backend.
+Consumers must not infer `/v1/completions`, `/v1/embeddings`, or other OpenAI
+APIs from the `openai` compatibility declaration.
+
+For the gateway:
+
+- allowed paths are `/v1/models`, `/v1/chat/completions`, and `/v1/responses`;
+- Gemini subscription models support Chat Completions;
+- `/v1/responses` returns HTTP 501 for Gemini subscription models;
+- `stream: true` for Gemini returns OpenAI-compatible SSE framing after the
+  Antigravity result completes; it is not upstream token-by-token streaming.
+
+Unsupported behavior fails explicitly rather than being translated to another
+API shape.
+
+[Back to top](#runtime-contract)
+
+---
+
+## 5. Gateway Model Contract
+
+Current gateway model IDs are:
+
+| Consumer model ID | Current trusted implementation |
+| --- | --- |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription through `openai-oauth` |
+| `gemini-subscription-pro` | Antigravity model `gemini-3.1-pro-high` |
+| `gemini-subscription-auto` | Antigravity model `gemini-3.7-flash-medium` |
+
+`gemini-subscription-auto` is a compatibility alias. Its current implementation
+is pinned and does not promise provider-side automatic model selection.
+
+Consumers discover Observed State through:
+
+```text
+GET http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000/v1/models
+```
+
+Provider credential format, OAuth state, sidecar ports, and Antigravity settings
+are outside the consumer contract.
+
+[Back to top](#runtime-contract)
 
 ---
 
@@ -161,108 +169,130 @@ OpenAI compatibility is the primary interoperability goal.
 
 Consumer projects own:
 
-- prompts
-- schemas
-- workflow behavior
-- role assignment
-- retry logic
-- timeout policies
-- authority boundaries
+- mapping workloads and roles to runtime endpoints or gateway model IDs;
+- prompts and schemas;
+- request budgets and application timeout policy;
+- retry and fallback policy;
+- tool execution;
+- workflow semantics and authority;
+- persistence;
+- correctness and quality evaluation.
 
-Consumers are responsible for selecting which runtime tier should be used for a particular workload.
+Consumers do not require direct subscription credential access. Failure of a
+runtime endpoint does not transfer runtime authority to the consumer or
+consumer policy authority to the runtime.
 
-The runtime does not make workload decisions.
-
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
 ## 7. Runtime Responsibilities
 
-The runtime owns:
+`llm-runtime` owns:
 
-- endpoint availability
-- deployment health
-- service discovery
-- runtime metrics endpoints and runtime metrics ownership
-- model serving
-- infrastructure lifecycle
+- Kubernetes Services and runtime endpoint publication;
+- local model-serving Deployments;
+- gateway router and trusted provider transports;
+- subscription login helpers and auth PVCs;
+- runtime NetworkPolicy and gateway-specific consumer RBAC;
+- gateway CI image build and publication;
+- runtime health and metrics endpoints;
+- Prometheus and DCGM infrastructure;
+- OCO datasource and dashboard publication;
+- operational tasks for deployment, validation, diagnostics, and rollback.
 
-The runtime is not responsible for project-specific behavior.
+The runtime does not decide which project role should use which model.
 
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
-## 8. Configuration Model
+## 8. ConfigMap Contract
 
-Illustrative configuration:
+`k8s/runtime-contract.yml` publishes:
 
 ```yaml
-STEWARD_LLM_BASE_URL: http://llm-large.llm-runtime.svc.cluster.local:8000
-
-AUDITOR_LLM_BASE_URL: http://llm-small.llm-runtime.svc.cluster.local:8000
-
-CODER_LLM_BASE_URL: http://llm-medium.llm-runtime.svc.cluster.local:8000
+LLM_SMALL_BASE_URL: "http://llm-small.llm-runtime.svc.cluster.local:8000"
+LLM_MEDIUM_BASE_URL: "http://llm-medium.llm-runtime.svc.cluster.local:8000"
+LLM_LARGE_BASE_URL: "http://llm-large.llm-runtime.svc.cluster.local:8000"
+LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+LLM_RUNTIME_NAMESPACE: "llm-runtime"
+LLM_API_COMPATIBILITY: "openai"
+CONTRACT_VERSION: "v1"
 ```
 
-Projects define their own mappings.
+A consumer may copy these values into its own configuration or read the
+ConfigMap through explicitly granted RBAC. The ConfigMap is not a secret store.
 
-The runtime remains unaware of project semantics.
-
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
-## 9. Versioning Policy
+## 9. Versioning and Change Rules
 
-The runtime contract should evolve conservatively.
+Compatible `v1` changes include:
 
-Breaking changes should be avoided whenever practical.
+- changing the concrete model behind a capacity tier;
+- changing quantization or GPU topology;
+- replacing provider transport internals while preserving the consumer model ID
+  and documented API behavior;
+- adding metrics;
+- adding opt-in model IDs or endpoints.
 
-Preferred evolution pattern:
+Changes that require deliberate migration include:
 
-```text
-additive changes
-```
+- removing or renaming a stable Service;
+- changing the namespace;
+- removing or renaming a ConfigMap contract key;
+- changing the meaning of an existing gateway model ID;
+- removing documented API behavior.
 
-rather than:
+Breaking contract changes increment `CONTRACT_VERSION`; they do not silently
+mutate `v1`.
 
-```text
-breaking replacement changes
-```
-
-Service names should remain stable.
-
-[Back to top](#navigation)
-
----
-
-## 10. Architectural Boundaries
-
-This contract does not define:
-
-- prompts
-- project roles
-- project workflows
-- planning systems
-- review systems
-- admission systems
-- persistence systems
-
-This document defines connectivity and interoperability only.
-
-[Back to top](#navigation)
+[Back to top](#runtime-contract)
 
 ---
 
-## 11. Closing Statement
+## 10. Non-Contract Implementation Details
 
-The runtime contract exists to provide stable access to shared inference capacity.
+The following are current implementation details and may change without a
+contract version bump while the stable interface remains intact:
 
-Consumer projects remain fully responsible for application semantics.
+- current Hugging Face model identity behind `small`, `medium`, or `large`;
+- quantization format;
+- GPU UUID or allocation;
+- tensor or pipeline parallel topology;
+- container image implementation;
+- backend loopback ports;
+- OAuth or PVC on-disk layout;
+- Prometheus scrape implementation;
+- CI action versions.
 
-The runtime remains responsible for infrastructure behavior.
+[Back to top](#runtime-contract)
+
+---
+
+## 11. Tradeoffs and Failure Behavior
+
+The contract favors stable service names over stable implementation identity.
+That reduces consumer coupling but means a tier name alone cannot prove which
+model is currently serving.
+
+The gateway model IDs provide a stronger consumer-facing identity, which makes
+renaming or changing their meaning more expensive because such a change
+requires contract migration.
+
+The contract does not promise provider availability, quota, credential
+freshness, or performance. These are Observed State. Consumers and operators
+must use health checks, model discovery, end-to-end provider checks, and
+telemetry to detect Drift from Desired State.
+
+On contract failure, the correct outcome is an explicit error or failed
+validation. Neither runtime nor consumer may silently substitute an undocumented
+endpoint, provider, model identity, or API behavior.
+
+[Back to top](#runtime-contract)
 
 ---
 
