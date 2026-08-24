@@ -72,6 +72,50 @@ task gateway:image:build
 The image installs the current official Antigravity CLI using Google's Linux
 installer and verifies `agy --version` during the image build.
 
+### GitHub Actions image build
+
+`.github/workflows/gateway-image.yml` is the canonical remote image build for
+`homel-dev/llm-runtime`. The README build badge reports this workflow on `main`. It
+runs on gateway changes for pull requests and `main`, on `v*` tags, and on
+manual dispatch. Pull requests run verification and a full BuildKit image build
+without publishing. `main`, tags, and manual runs publish to:
+
+```text
+ghcr.io/homel-dev/llm-runtime-gateway
+```
+
+Published images include the full commit-SHA tag (`sha-<40-hex-sha>`), branch
+or release tags, BuildKit provenance, and an SBOM. `main` also updates `latest`.
+The workflow builds only `linux/amd64`, matching the srv100 runtime and avoiding
+an unverified arm64 gateway artifact. GitHub's Actions cache is used only for
+BuildKit layers; deployments should reference an immutable image digest when a
+specific build is being promoted. Workflow dependencies use explicit immutable
+release tags rather than floating major tags.
+
+The package may be private. The Deployment already references
+`imagePullSecrets: [{name: ghcr-pull-secret}]`; therefore `llm-runtime` must
+have that Secret before pulling a private GHCR image. For example:
+
+```bash
+kubectl -n llm-runtime create secret docker-registry ghcr-pull-secret \
+  --docker-server=ghcr.io \
+  --docker-username="$GHCR_USER" \
+  --docker-password="$GHCR_TOKEN"
+```
+
+Deploy an exact CI result by digest:
+
+```bash
+LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
+  task gateway:deploy
+```
+
+The workflow does not make the Dockerfile bit-for-bit reproducible by itself.
+The current Dockerfile intentionally uses Google's official Antigravity installer,
+which resolves the then-current Antigravity release at build time. The resulting
+GHCR digest is immutable, but rebuilding the same git commit later can therefore
+produce a different image until the Antigravity dependency is version-pinned.
+
 ## Authenticate Google AI subscription
 
 Run once for a new/expired auth PVC:
@@ -164,4 +208,3 @@ calling is represented through a schema-constrained transport envelope and
 validated against the declared function names. `stream: true` returns
 OpenAI-compatible SSE framing after the Antigravity result completes; it is not
 upstream token-by-token streaming.
-
