@@ -1,316 +1,272 @@
 # LLM Runtime
 
-## Shared LLM Inference Runtime
+[![Gateway image](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml/badge.svg?branch=main)](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml)
+[![Last commit](https://img.shields.io/github/last-commit/homel-dev/llm-runtime?branch=main)](https://github.com/homel-dev/llm-runtime/commits/main)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-llm--runtime-326CE5?logo=kubernetes&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-24-5FA04E?logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-gateway-3178C6?logo=typescript&logoColor=white)
+![API](https://img.shields.io/badge/API-OpenAI--compatible-412991)
+![Platform](https://img.shields.io/badge/gateway-linux%2Famd64-555555?logo=linux&logoColor=white)
 
-*Repository Guide and Infrastructure Proposal*
+Shared LLM serving infrastructure for Homel projects. The repository owns local
+model-serving tiers, the trusted subscription gateway, their Kubernetes
+contracts, runtime observability, and operational tooling.
 
----
+**Repository:** `homel-dev/llm-runtime`
+**Namespace:** `llm-runtime`
+**Status:** implemented infrastructure; deployment is split into explicit
+runtime, gateway, observability, and OCO-consumer lifecycles.
 
-## Navigation
+## What this repository owns
 
-- [0. Status and Scope](#0-status-and-scope)
-- [1. Purpose](#1-purpose)
-- [2. What This Repository Provides](#2-what-this-repository-provides)
-- [3. What This Repository Does Not Provide](#3-what-this-repository-does-not-provide)
-- [4. Repository Layout](#4-repository-layout)
-- [5. Runtime Model](#5-runtime-model)
-- [6. Kubernetes Deployment](#6-kubernetes-deployment)
-- [7. Consumer Projects](#7-consumer-projects)
-- [8. Operations](#8-operations)
-- [9. Documentation](#9-documentation)
+- `small`, `medium`, and `large` local inference services;
+- stable OpenAI-compatible service endpoints;
+- the trusted OpenAI-compatible subscription gateway;
+- ChatGPT/Codex and Google AI subscription authentication state;
+- gateway image source, tests, CI build, and GHCR publication;
+- Kubernetes manifests and NetworkPolicy;
+- Prometheus and DCGM runtime metrics;
+- OCO/Grafana datasource and dashboards;
+- deployment, health, smoke, benchmark, and diagnostics tasks.
 
----
+Consumer projects still own prompts, schemas, workflow semantics, authority,
+retry policy, persistence, and project-level quality evaluation.
 
-## 0. Status and Scope
+## Architecture
 
-**Status:** Proposal
+```mermaid
+flowchart LR
+    C[Consumer projects]
 
-This repository defines shared LLM inference infrastructure for Homel projects.
+    subgraph R[llm-runtime namespace]
+        S[llm-small\nllama.cpp]
+        M[llm-medium\nvLLM]
+        L[llm-large\nvLLM]
+        G[llm-openai-api-gateway\nOpenAI-compatible]
+        P[Prometheus]
+        D[DCGM exporter]
 
-The repository owns:
+        G --> O[ChatGPT / Codex subscription]
+        G --> A[Google AI subscription\nAntigravity CLI]
+        P --> S
+        P --> M
+        P --> L
+        P --> G
+        P --> D
+    end
 
-- shared model-serving runtime
-- runtime service contracts
-- deployment manifests
-- operational tooling
-- runtime metrics production and storage
+    C --> S
+    C --> M
+    C --> L
+    C --> G
+    P --> OCO[OCO / Grafana]
+```
 
-The repository does not own:
+## Current runtime tiers
 
-- project prompts
-- project schemas
-- project workflows
-- project authority models
-- project persistence
-- project-specific behavior
+The model identities below describe the current manifests. They are deployment
+implementation details, not stable consumer contract fields.
 
-[Back to top](#navigation)
+| Tier | Current model | Runtime | Service |
+| --- | --- | --- | --- |
+| `small` | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` | llama.cpp server | `llm-small:8000` |
+| `medium` | `curiousmind147/microsoft-phi-4-AWQ-4bit-GEMM` | vLLM | `llm-medium:8000` |
+| `large` | `DeepSeek-R1-Distill-Llama-70B-AWQ` | vLLM, 3-GPU pipeline parallel | `llm-large:8000` |
 
----
-
-## 1. Purpose
-
-Multiple Homel projects require access to local or local-first LLM inference.
-
-Examples include:
-
-- Memory Steward
-- Relentless Rekrow
-- Intent Steward
-- The Dean
-
-Without a shared runtime, every project tends to deploy its own model-serving stack.
-
-The purpose of this repository is to provide a reusable inference platform that can be consumed by multiple projects simultaneously.
-
-The runtime is shared.
-
-Projects remain independent.
-
-[Back to top](#navigation)
-
----
-
-## 2. What This Repository Provides
-
-This repository provides:
-
-- Kubernetes namespace
-- vLLM deployments
-- stable runtime service endpoints
-- runtime service contracts
-- shared operational tooling
-- OCO consumer dashboard and datasource integration
-- deployment automation
-- runtime documentation
-
-The runtime exposes OpenAI-compatible APIs.
-
-Consumer projects connect to these APIs through stable service endpoints.
-
-[Back to top](#navigation)
-
----
-
-## 3. What This Repository Does Not Provide
-
-This repository does not provide:
-
-- Memory Steward logic
-- Relentless Rekrow logic
-- Intent Steward logic
-- The Dean logic
-- prompts
-- schemas
-- admission control
-- planning logic
-- review logic
-- orchestration logic
-- persistence logic
-
-Sharing model-serving infrastructure does not imply shared project semantics.
-
-Projects remain independent.
-
-[Back to top](#navigation)
-
----
-
-## 4. Repository Layout
+Stable cluster endpoints are published by `k8s/runtime-contract.yml`:
 
 ```text
-.
-├── README.md
-├── Taskfile.yml
-├── .gitignore
-│
-├── docs/
-│   ├── 00_style_guide.md
-│   ├── 01_overview.md
-│   ├── 02_runtime_contract.md
-│   └── 03_operations.md
-│
-├── k8s/
-│   ├── kustomization.yml
-│   ├── namespace.yml
-│   ├── runtime-contract.yml
-│   ├── networkpolicy.yml
-│   │
-│   ├── small/
-│   ├── medium/
-│   ├── large/
-│   ├── observability/        # runtime-owned Prometheus and DCGM exporter
-│   └── oco-consumer/         # dashboard, datasource, and RBAC published for OCO
-│
-├── scripts/
-│   ├── list-models.sh
-│   ├── smoke-chat.sh
-│   └── observability-lan-proxy.sh
-│
-└── hack/
-    ├── benchmark-small.sh
-    ├── benchmark-medium.sh
-    └── benchmark-large.sh
+http://llm-small.llm-runtime.svc.cluster.local:8000
+http://llm-medium.llm-runtime.svc.cluster.local:8000
+http://llm-large.llm-runtime.svc.cluster.local:8000
+http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 ```
 
-[Back to top](#navigation)
+## Trusted subscription gateway
 
----
+`llm-runtime` owns the gateway implementation and credentials. RR and other
+projects consume it as a runtime service.
 
-## 5. Runtime Model
+Current advertised gateway model IDs:
 
-The runtime provides capacity-oriented inference tiers.
+| Model ID | Provider path |
+| --- | --- |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription through `openai-oauth` |
+| `gemini-subscription-pro` | Google AI subscription through Antigravity `gemini-3.1-pro-high` |
+| `gemini-subscription-auto` | compatibility alias pinned to Antigravity `gemini-3.7-flash-medium` |
 
-Initial tiers:
+`gemini-subscription-auto` is a stable compatibility name; it is not dynamic
+provider-side auto-selection.
 
-```text
-small
-medium
-large
-```
+See [docs/04_gateway.md](docs/04_gateway.md) for authentication, API limits,
+security boundaries, CI image publication, deployment, and telemetry.
 
-Each tier exposes an OpenAI-compatible endpoint.
+## Quick start
 
-Illustrative services:
+Prerequisites: Docker, Minikube, `kubectl`, Task, and `jq`. NVIDIA GPU support
+is required for the GPU-backed tiers.
 
-```text
-llm-small.llm-runtime.svc.cluster.local
-llm-medium.llm-runtime.svc.cluster.local
-llm-large.llm-runtime.svc.cluster.local
-```
-
-Consumer projects decide how to map their own workloads to runtime tiers.
-
-The runtime provides inference capacity only.
-
-The runtime does not define project roles.
-
-[Back to top](#navigation)
-
----
-
-## 6. Kubernetes Deployment
-
-Deploy runtime:
+Start Minikube if needed:
 
 ```bash
-task llm:deploy
+task miniup
 ```
 
-View status:
+Deploy the local inference tiers and runtime contract:
 
 ```bash
-task llm:status
+task up
+task status
 ```
 
-List available models:
+Validate local tiers:
 
 ```bash
+task llm:list-small
+task llm:list-medium
 task llm:list-large
-```
 
-Run smoke tests:
-
-```bash
 task llm:smoke-small
 task llm:smoke-medium
 task llm:smoke-large
 ```
 
-Delete runtime:
+For a local Minikube gateway image:
 
 ```bash
-task llm:delete
+task gateway:verify
+task gateway:image:build
 ```
 
-[Back to top](#navigation)
+Populate subscription authentication when a PVC is new or credentials have
+expired:
 
----
-
-## 7. Consumer Projects
-
-Consumer projects configure their own runtime assignments.
-
-Illustrative example:
-
-```yaml
-STEWARD_LLM_BASE_URL: http://llm-large.llm-runtime.svc.cluster.local:8000
-
-AUDITOR_LLM_BASE_URL: http://llm-small.llm-runtime.svc.cluster.local:8000
+```bash
+task gateway:subscription:login
+task gateway:gemini:login
 ```
 
-Projects remain responsible for:
+Deploy and validate the gateway:
 
-- prompts
-- schemas
-- role definitions
-- workflow behavior
-- authority boundaries
-- persistence
+```bash
+task gateway:deploy
+task gateway:status
+task gateway:gemini:check
+```
 
-The runtime remains responsible for inference capacity only.
+Deploy metrics and the OCO/Grafana consumer contract:
 
-[Back to top](#navigation)
+```bash
+task gateway:observability:deploy
+task observability:gateway-up
+```
 
----
+## Gateway CI and GHCR
 
-## 8. Operations
+`.github/workflows/gateway-image.yml` is the canonical remote gateway image
+build.
 
-The runtime should be monitored as infrastructure.
+- pull requests: verify + `linux/amd64` image build, no registry write;
+- `main`, `v*` tags, and manual dispatch: verify + build + GHCR publication;
+- image: `ghcr.io/homel-dev/llm-runtime-gateway`;
+- published metadata includes commit-SHA/ref tags, SBOM, and provenance;
+- BuildKit layers use the GitHub Actions cache;
+- deployment should promote an immutable image digest.
 
-Important signals include:
+Example:
 
-- GPU utilization
-- GPU memory consumption
-- request latency
-- request throughput
-- queue depth
-- timeout rate
-- error rate
-- pod health
+```bash
+LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
+  task gateway:deploy
+```
 
-Project effectiveness metrics remain the responsibility of individual projects.
+For a private package, create `ghcr-pull-secret` in `llm-runtime` before the
+Deployment attempts to pull the image.
 
-[Back to top](#navigation)
+The image digest is immutable. Rebuilding the same commit is not yet guaranteed
+to be bit-for-bit reproducible because the Dockerfile currently installs the
+then-current official Antigravity CLI release.
 
----
+## Observability
 
-## 9. Documentation
+Runtime-owned Prometheus scrapes:
 
-Canonical documentation is stored under:
+- llama.cpp/vLLM tier metrics on `:8000/metrics`;
+- gateway metrics on the dedicated `:9091/metrics` port;
+- DCGM exporter on `:9400/metrics`.
+
+The gateway exports request counts, backend/model/status labels, latency
+histograms, in-flight requests, transport errors/timeouts, policy rejects,
+traffic bytes, last-success/error timestamps, uptime, and RSS.
+
+OCO consumer ConfigMaps publish:
+
+- the general `LLM Runtime` dashboard;
+- the `LLM Runtime Gateway` dashboard;
+- the Prometheus datasource contract;
+- read-only RBAC for the observability console.
+
+Useful checks:
+
+```bash
+task observability:targets
+task observability:vllm-up
+task observability:gateway-target
+task observability:gateway-up
+task gateway:metrics
+```
+
+## Deployment lifecycle
+
+The lifecycles are intentionally separate:
+
+| Component | Deploy | Delete/status |
+| --- | --- | --- |
+| inference tiers + runtime contract | `task up` | `task down`, `task status` |
+| subscription gateway | `task gateway:deploy` | `task gateway:delete`, `task gateway:status` |
+| Prometheus + DCGM | `task observability:deploy` | `task observability:delete`, `task observability:status` |
+| OCO consumer contract | `task oco-consumer:deploy` | `task oco-consumer:delete`, `task oco-consumer:status` |
+
+`task up` does **not** deploy the gateway or observability resources.
+
+## Repository layout
 
 ```text
-docs/
+.
+├── .github/workflows/gateway-image.yml
+├── README.md
+├── Taskfile.yml
+├── docs/
+│   ├── 00_style_guide.md
+│   ├── 01_overview.md
+│   ├── 02_runtime_contract.md
+│   ├── 03_operations.md
+│   └── 04_gateway.md
+├── gateway/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── src/
+│   └── test/
+├── k8s/
+│   ├── small/
+│   ├── medium/
+│   ├── large/
+│   ├── gateway/
+│   ├── observability/
+│   ├── oco-consumer/
+│   ├── runtime-contract.yml
+│   └── networkpolicy.yml
+├── scripts/
+└── hack/
 ```
 
-Initial documents:
+## Documentation
 
-- `00_style_guide.md`
-- `01_overview.md`
-- `02_runtime_contract.md`
-- `03_operations.md`
+- [Architecture overview](docs/01_overview.md)
+- [Runtime contract](docs/02_runtime_contract.md)
+- [Operations guide](docs/03_operations.md)
+- [Gateway](docs/04_gateway.md)
+- [Documentation style guide](docs/00_style_guide.md)
 
-The overview document defines architecture.
-
-The runtime contract document defines service contracts.
-
-The operations document defines deployment and operational procedures.
-
-[Back to top](#navigation)
-
----
-
-**END OF DOCUMENT**
-
----
-
-## Trusted subscription gateway
-
-`llm-runtime` also owns the cluster's trusted OpenAI-compatible subscription
-gateway at `llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000`, including
-its source, image, auth state, Kubernetes resources, and operator tasks. RR is a
-consumer of this runtime contract; it does not own the gateway implementation.
-
-See [docs/04_gateway.md](docs/04_gateway.md) for the ChatGPT/Codex and Google AI
-subscription backends, Antigravity authentication, deployment, and end-to-end
-smoke checks.
+The manifests and `Taskfile.yml` are executable truth. Documentation describes
+those contracts and should be updated in the same change when they change.
