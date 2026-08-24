@@ -1,7 +1,6 @@
-docs/01_overview.md
 # SHARED LLM RUNTIME MODEL
-## Shared Inference Infrastructure for Multi-Project AI Systems
-### Foundational Infrastructure Specification
+## Shared Inference and Trusted Provider Infrastructure
+### Architecture Specification
 
 ---
 
@@ -9,43 +8,31 @@ docs/01_overview.md
 
 - [0. Status, Scope, and Authority](#0-status-scope-and-authority)
 - [1. Purpose](#1-purpose)
-- [2. Design Goals](#2-design-goals)
-- [3. Problem Statement](#3-problem-statement)
-- [4. Core Principles](#4-core-principles)
-- [5. Shared Runtime Model](#5-shared-runtime-model)
-- [6. Capacity Tiers](#6-capacity-tiers)
-- [7. Runtime Contract](#7-runtime-contract)
-- [8. Project Consumption Model](#8-project-consumption-model)
-- [9. Project Independence](#9-project-independence)
-- [10. Observability Model](#10-observability-model)
-- [11. Capacity Management](#11-capacity-management)
-- [12. Repository Ownership](#12-repository-ownership)
-- [13. Migration Model](#13-migration-model)
-- [14. Future Expansion](#14-future-expansion)
-- [15. Architectural Boundaries and Non-Goals](#15-architectural-boundaries-and-non-goals)
-- [16. Closing Statement](#16-closing-statement)
+- [2. Design Principles](#2-design-principles)
+- [3. Runtime Architecture](#3-runtime-architecture)
+- [4. Local Inference Tiers](#4-local-inference-tiers)
+- [5. Trusted Subscription Gateway](#5-trusted-subscription-gateway)
+- [6. Runtime Contract](#6-runtime-contract)
+- [7. Consumer Ownership Boundary](#7-consumer-ownership-boundary)
+- [8. Network and Security Boundary](#8-network-and-security-boundary)
+- [9. Observability Model](#9-observability-model)
+- [10. Repository Ownership](#10-repository-ownership)
+- [11. Deployment Lifecycles](#11-deployment-lifecycles)
+- [12. Non-Goals](#12-non-goals)
 
 ---
 
 ## 0. Status, Scope, and Authority
 
-**Status:** FOUNDATIONAL
+**Status:** IMPLEMENTED
 
-**Audience:**
-- Platform contributors
-- Infrastructure contributors
-- Runtime contributors
-- Project maintainers
+This document describes the architecture implemented by the current
+`llm-runtime` manifests, gateway source, Taskfile, and observability resources.
+Executable configuration remains authoritative if prose and implementation ever
+diverge.
 
-**Change policy:**
-- Append-only
-- No silent edits
-
-This document defines the canonical architecture for shared LLM runtime infrastructure.
-
-This document focuses exclusively on inference infrastructure.
-
-This document does not define project-specific workflows, prompts, schemas, authority models, persistence behavior, or project semantics.
+The repository provides shared LLM infrastructure. It does not define the
+semantics, prompts, workflows, or authority model of consumer projects.
 
 [Back to top](#navigation)
 
@@ -53,180 +40,107 @@ This document does not define project-specific workflows, prompts, schemas, auth
 
 ## 1. Purpose
 
-Multiple Homel projects require access to LLM inference capability.
+Homel projects need reusable access to both local inference capacity and trusted
+subscription-backed frontier models. Duplicating those provider transports,
+credentials, model servers, GPU allocations, and metrics inside every project
+creates unnecessary operational and security surface.
 
-Examples include:
+`llm-runtime` centralizes that infrastructure while keeping project behavior
+independent.
 
-- Memory Steward
-- Relentless Rekrow
-- Intent Steward
-- The Dean
+The platform therefore owns two classes of service:
 
-Additional projects may be introduced in the future.
-
-Without shared runtime infrastructure, every project naturally evolves toward deploying and maintaining its own model-serving stack.
-
-The purpose of this architecture is to provide reusable inference infrastructure that can be consumed by multiple projects simultaneously while preserving complete project independence.
-
-The runtime is shared.
-
-Projects remain independent.
+1. local capacity-oriented inference tiers;
+2. a trusted OpenAI-compatible gateway for subscription-backed providers.
 
 [Back to top](#navigation)
 
 ---
 
-## 2. Design Goals
+## 2. Design Principles
 
-The shared runtime architecture exists to support the following goals:
+### Stable interfaces, replaceable implementation
 
-1. efficient GPU utilization
-2. elimination of duplicate model deployments
-3. reduced operational overhead
-4. reusable inference infrastructure
-5. project independence
-6. centralized runtime metrics
-7. controlled capacity growth
-8. model experimentation
-9. future scalability
+Consumers depend on service endpoints and advertised model IDs. They should not
+depend on GPU placement, quantization, container topology, or current local
+model identity.
 
-The architecture prioritizes infrastructure simplicity while preserving project autonomy.
+### Provider credentials remain in trusted infrastructure
+
+Subscription credentials and provider transports belong to `llm-runtime`, not
+to hostile jobs or project agent configuration.
+
+### Project independence
+
+Sharing inference infrastructure does not imply shared prompts, schemas,
+workflows, policies, persistence, or authority.
+
+### Observable infrastructure
+
+Local inference and gateway behavior are exported to Prometheus. OCO/Grafana
+loads runtime-owned dashboard and datasource contracts from this repository.
+
+### Explicit lifecycle boundaries
+
+Local inference, gateway, observability, and OCO consumer resources have
+separate deployment tasks. An operator can change one without implicitly
+replacing all others.
 
 [Back to top](#navigation)
 
 ---
 
-## 3. Problem Statement
+## 3. Runtime Architecture
 
-Without shared runtime infrastructure, projects tend to deploy independent model-serving stacks.
+All runtime-owned Kubernetes resources use the `llm-runtime` namespace.
 
-Illustrative example:
+```mermaid
+flowchart LR
+    RR[Relentless Rekrow]
+    MS[Memory Steward]
+    OTHER[Other consumers]
 
-```text
-Memory Steward
-├── small model
-├── medium model
-└── large model
+    subgraph NS[llm-runtime]
+        SMALL[llm-small]
+        MEDIUM[llm-medium]
+        LARGE[llm-large]
+        GW[llm-openai-api-gateway]
+        PROM[Prometheus]
+        DCGM[DCGM exporter]
 
-Relentless Rekrow
-├── small model
-├── medium model
-└── large model
+        GW --> CODEX[openai-oauth\nChatGPT/Codex]
+        GW --> AGY[Antigravity adapter\nGoogle AI]
+        PROM --> SMALL
+        PROM --> MEDIUM
+        PROM --> LARGE
+        PROM --> GW
+        PROM --> DCGM
+    end
 
-Intent Steward
-├── small model
-├── medium model
-└── large model
+    RR --> GW
+    RR --> SMALL
+    RR --> MEDIUM
+    RR --> LARGE
+    MS --> SMALL
+    MS --> MEDIUM
+    MS --> LARGE
+    OTHER --> SMALL
+    OTHER --> MEDIUM
+    OTHER --> LARGE
+    PROM --> OCO[OCO / Grafana]
 ```
 
-This creates:
-
-- duplicate model loading
-- excessive VRAM consumption
-- poor GPU utilization
-- duplicated operational effort
-- fragmented observability
-- inconsistent deployment practices
-- increased maintenance burden
-
-As the number of projects grows, these inefficiencies become increasingly expensive.
-
-The architecture defined here separates inference capacity from application behavior.
+The three local tiers are generally consumable across namespaces on port 8000.
+The subscription gateway has a narrower ingress policy: RR agent Pods may use
+port 8000 and the runtime Prometheus Pod may use metrics port 9091.
 
 [Back to top](#navigation)
 
 ---
 
-## 4. Core Principles
+## 4. Local Inference Tiers
 
-### Shared Infrastructure
-
-Model-serving infrastructure is a shared platform capability.
-
-Projects consume runtime services.
-
-Projects do not own runtime deployments by default.
-
-### Project Independence
-
-Sharing inference infrastructure does not imply shared project behavior.
-
-Projects remain independent.
-
-### Runtime Neutrality
-
-A runtime tier provides inference capacity.
-
-A runtime tier does not define:
-
-- project semantics
-- project roles
-- project workflows
-- project authority
-
-### Explicit Contracts
-
-Projects consume runtime services through explicit configuration.
-
-The runtime publishes stable service endpoints.
-
-Projects remain responsible for mapping their own workloads to runtime tiers.
-
-### Observability First
-
-Capacity decisions should be driven by observed behavior rather than assumptions.
-
-Infrastructure must remain measurable.
-
-[Back to top](#navigation)
-
----
-
-## 5. Shared Runtime Model
-
-The architecture introduces a dedicated Kubernetes namespace:
-
-```text
-llm-runtime
-```
-
-The namespace hosts all shared runtime services.
-
-Illustrative architecture:
-
-```text
-                    llm-runtime namespace
-
-              ┌──────────────────────────┐
-              │    Shared LLM Runtime    │
-              └─────────────┬────────────┘
-                            │
-      ┌─────────────────────┼─────────────────────┐
-      │                     │                     │
-      ▼                     ▼                     ▼
-
-  llm-small            llm-medium           llm-large
-
-      ▲                     ▲                     ▲
-      │                     │                     │
-
-Memory Steward     Relentless Rekrow     Intent Steward
-The Dean           Future Projects
-```
-
-The runtime exposes OpenAI-compatible endpoints.
-
-Projects communicate with runtime services through Kubernetes service discovery.
-
-[Back to top](#navigation)
-
----
-
-## 6. Capacity Tiers
-
-The runtime architecture supports capacity-oriented inference tiers.
-
-Initial tiers:
+The stable capacity tier names are:
 
 ```text
 small
@@ -234,336 +148,249 @@ medium
 large
 ```
 
-Tier names describe capacity class.
+Current manifests deploy:
 
-Tier names do not define project behavior.
+| Tier | Current implementation | Current model | Relevant capacity |
+| --- | --- | --- | --- |
+| `small` | llama.cpp server | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` | CPU-backed |
+| `medium` | vLLM | `curiousmind147/microsoft-phi-4-AWQ-4bit-GEMM` | 1 GPU |
+| `large` | vLLM | `DeepSeek-R1-Distill-Llama-70B-AWQ` | 3 GPUs, pipeline parallel |
 
-The architecture does not require a fixed number of tiers.
+These identities are implementation details. A consumer that requires a
+specific model identity must explicitly verify `/v1/models`; the tier contract
+itself does not promise that identity permanently.
 
-Future examples:
-
-```text
-small
-medium
-large
-xlarge
-```
-
-or:
+Stable services:
 
 ```text
-small
-medium
-large
-external
+llm-small.llm-runtime.svc.cluster.local:8000
+llm-medium.llm-runtime.svc.cluster.local:8000
+llm-large.llm-runtime.svc.cluster.local:8000
 ```
-
-The architecture defines capacity classes rather than permanent model identities.
 
 [Back to top](#navigation)
 
 ---
 
-## 7. Runtime Contract
+## 5. Trusted Subscription Gateway
 
-The runtime publishes stable service endpoints.
+The gateway is a first-class runtime service, not RR-owned application code.
 
-Illustrative service contract:
+Stable service:
+
+```text
+llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
+```
+
+The Pod contains trusted loopback transports. The externally visible router
+does not pass provider credentials to consumers.
+
+Current model aliases:
+
+| Gateway model | Trusted backend |
+| --- | --- |
+| `gpt-5.6-sol` | `openai-oauth` on loopback port 10531 |
+| `gemini-subscription-pro` | Antigravity `gemini-3.1-pro-high` on loopback port 10532 |
+| `gemini-subscription-auto` | Antigravity `gemini-3.7-flash-medium` on loopback port 10532 |
+
+The two legacy PVC names `rr-openai-subscription-auth` and
+`rr-gemini-subscription-auth` are intentionally retained for migration
+continuity. Their names no longer indicate ownership; the resources belong to
+`llm-runtime`.
+
+Detailed gateway behavior is documented in [04_gateway.md](04_gateway.md).
+
+[Back to top](#navigation)
+
+---
+
+## 6. Runtime Contract
+
+`k8s/runtime-contract.yml` publishes stable configuration:
 
 ```text
 LLM_SMALL_BASE_URL
 LLM_MEDIUM_BASE_URL
 LLM_LARGE_BASE_URL
+LLM_GATEWAY_BASE_URL
+LLM_RUNTIME_NAMESPACE
+LLM_API_COMPATIBILITY
+CONTRACT_VERSION
 ```
 
-Example endpoint values:
+The current contract version is `v1` and API compatibility is declared as
+`openai`.
 
-```text
-http://llm-small.llm-runtime.svc.cluster.local:8000
-http://llm-medium.llm-runtime.svc.cluster.local:8000
-http://llm-large.llm-runtime.svc.cluster.local:8000
-```
+The runtime contract intentionally does not expose provider credentials,
+quantization parameters, GPU identifiers, provider login state, or project
+roles.
 
-The runtime contract exposes connectivity information.
-
-The runtime contract does not expose project behavior.
-
-Projects remain responsible for configuring how runtime services are consumed.
+See [02_runtime_contract.md](02_runtime_contract.md) for the consumer contract.
 
 [Back to top](#navigation)
 
 ---
 
-## 8. Project Consumption Model
+## 7. Consumer Ownership Boundary
 
-Each project determines how its own workloads are assigned to runtime tiers.
+Consumer projects own:
 
-Illustrative example:
+- prompts and schemas;
+- workflow and role behavior;
+- authority boundaries;
+- project timeout/retry policy;
+- persistence;
+- project-specific tools;
+- correctness and quality evaluation;
+- project-level observability.
 
-```text
-Project A
+`llm-runtime` owns:
 
-Workload 1 → small
-Workload 2 → large
-```
-
-Illustrative example:
-
-```text
-Project B
-
-Workload X → medium
-Workload Y → large
-```
-
-These assignments are project-specific.
-
-Runtime assignment does not imply equivalence between workloads belonging to different projects.
-
-The runtime remains unaware of project semantics.
-
-[Back to top](#navigation)
-
----
-
-## 9. Project Independence
-
-Projects own:
-
-- prompts
-- schemas
-- workflows
-- role definitions
-- authority boundaries
-- persistence
-- project-specific observability
-- quality evaluation
-
-The runtime owns:
-
-- model serving
-- service endpoints
-- GPU scheduling
-- runtime health
-- runtime metrics production and storage
-- deployment manifests
-- model cache management
+- local model serving;
+- stable runtime Services;
+- gateway source and provider transports;
+- subscription auth PVCs and login helpers;
+- gateway image build and publication;
+- runtime NetworkPolicy and gateway consumer RBAC;
+- Prometheus/DCGM runtime telemetry;
+- OCO datasource/dashboard publication;
+- runtime deployment and diagnostics tooling.
 
 The boundary is:
 
 ```text
-llm-runtime owns inference capacity.
-
-Consumer projects own application meaning.
+llm-runtime owns model/provider infrastructure.
+Consumers own application meaning and authority.
 ```
 
 [Back to top](#navigation)
 
 ---
 
-## 10. Observability Model
+## 8. Network and Security Boundary
 
-The architecture assumes separate metrics ownership and presentation ownership.
+Local inference Pods carry `app.kubernetes.io/component: inference` and are
+selected by the general runtime consumer NetworkPolicy on TCP/8000.
 
-### Runtime Metrics
+The gateway uses its own ingress/egress policy:
 
-Runtime metrics production and storage belong to this repository. Shared Grafana presentation belongs to OCO.
+- RR `rr-pi-agent` Pods may connect to TCP/8000;
+- runtime Prometheus may connect to TCP/9091;
+- provider sidecars use only Pod loopback for router-to-backend traffic;
+- egress allows cluster DNS plus public TCP/443 while excluding private,
+  link-local, and CGNAT address ranges;
+- containers run non-root with dropped capabilities and read-only root
+  filesystems where declared by the gateway Deployment.
 
-Examples:
+Subscription auth is persisted on dedicated PVCs and never becomes part of the
+runtime ConfigMap contract.
 
-- GPU utilization
-- GPU memory consumption
-- request latency
-- request throughput
-- timeout rate
-- error rate
-- queue depth
-- pod health
-- container restarts
+[Back to top](#navigation)
 
-These metrics support capacity planning.
+---
 
-### Project Effectiveness Observability
+## 9. Observability Model
 
-Project effectiveness belongs to consumer projects.
+Runtime metrics production and storage are owned by `llm-runtime`.
+Presentation is consumed by OCO/Grafana through the ConfigMaps under
+`k8s/oco-consumer/`.
 
-Examples:
+Prometheus jobs include:
 
-- schema validation success rate
-- retry rate
-- workflow success rate
-- escalation frequency
-- correction rate
-- project-specific quality metrics
+```text
+vllm-small
+vllm-medium
+vllm-large
+llm-gateway
+dcgm-exporter
+```
 
-These metrics support project-level model evaluation.
+The gateway's dedicated metrics port is TCP/9091. It exports request rate,
+backend/model/status dimensions, latency histograms, in-flight requests,
+transport errors/timeouts, policy rejects, traffic bytes, last success/error
+state, uptime, and process RSS.
 
 Runtime observability answers:
 
 ```text
-Is runtime infrastructure healthy and sufficiently provisioned?
+Is model/provider infrastructure healthy and sufficiently provisioned?
 ```
 
-Project observability answers:
+Consumer observability answers:
 
 ```text
-Is this runtime tier effective for this project workload?
+Is the chosen model/provider effective for this project workload?
 ```
 
 [Back to top](#navigation)
 
 ---
 
-## 11. Capacity Management
+## 10. Repository Ownership
 
-Multiple projects may compete for runtime resources.
-
-Potential symptoms include:
-
-- queue growth
-- request contention
-- increased latency
-- timeout growth
-- uneven workload distribution
-
-These are operational concerns.
-
-They do not invalidate the architecture.
-
-Possible future mitigations include:
-
-- concurrency limits
-- queue controls
-- priority policies
-- dedicated replicas
-- additional GPUs
-- additional runtime tiers
-
-Operational controls should be introduced based on observed runtime behavior.
-
-[Back to top](#navigation)
-
----
-
-## 12. Repository Ownership
-
-This repository owns:
-
-- `llm-runtime` namespace
-- runtime service definitions
-- runtime deployment manifests
-- runtime contracts
-- runtime metrics production and storage
-- runtime operational tooling
-- runtime documentation
-
-This repository does not own consumer project behavior.
-
-[Back to top](#navigation)
-
----
-
-## 13. Migration Model
-
-Projects may initially contain embedded runtime deployments.
-
-Migration should be incremental.
-
-Recommended sequence:
-
-1. deploy shared runtime infrastructure
-2. establish stable runtime endpoints
-3. validate runtime service contracts
-4. update projects to support external runtime endpoints
-5. move embedded runtime deployments into optional development overlays
-6. make shared runtime the default deployment model
-7. preserve standalone deployment mode where required
-8. add runtime metrics and publish OCO dashboard contract
-9. add project-specific effectiveness metrics
-
-Migration should not mix runtime infrastructure with project semantics.
-
-[Back to top](#navigation)
-
----
-
-## 14. Future Expansion
-
-Future projects should consume shared runtime infrastructure whenever practical.
-
-Illustrative consumers include:
-
-- Memory Steward
-- Relentless Rekrow
-- Intent Steward
-- The Dean
-- future platform services
-
-Future runtime evolution may include:
-
-- additional capacity tiers
-- dedicated review tiers
-- external inference providers
-- multi-node deployments
-- workload routing policies
-
-Such changes do not alter the core architectural principle:
+Relevant repository areas:
 
 ```text
-Inference capacity is shared.
-
-Project behavior remains project-owned.
+gateway/                 trusted gateway implementation and tests
+k8s/small/               small local tier
+k8s/medium/              medium local tier
+k8s/large/               large local tier
+k8s/gateway/             gateway Deployment, Service, PVCs, RBAC, login Pods
+k8s/observability/       Prometheus and DCGM exporter
+k8s/oco-consumer/        Grafana/OCO datasource, dashboards, reader RBAC
+k8s/runtime-contract.yml stable consumer endpoint contract
+scripts/                 health, smoke, metrics, gateway and exposure helpers
+hack/                    benchmark helpers
 ```
 
-[Back to top](#navigation)
-
----
-
-## 15. Architectural Boundaries and Non-Goals
-
-This document does not define:
-
-- prompts
-- schemas
-- project workflows
-- project roles
-- planning systems
-- review systems
-- admission control
-- orchestration logic
-- persistence systems
-- quality scoring systems
-
-This document does not define role equivalence between projects.
-
-This document does not define project behavior.
-
-The sole purpose of this document is definition of shared inference infrastructure.
+Gateway image CI is owned by `.github/workflows/gateway-image.yml` and publishes
+`ghcr.io/homel-dev/llm-runtime-gateway` for trusted events.
 
 [Back to top](#navigation)
 
 ---
 
-## 16. Closing Statement
+## 11. Deployment Lifecycles
 
-This document formalizes shared LLM runtime infrastructure.
+The root Kustomization deploys the namespace, runtime contract, general
+NetworkPolicy, and the three local inference tiers:
 
-The architecture provides reusable inference capacity for multiple independent projects.
+```bash
+task up
+```
 
-Projects remain independent with respect to:
+The following are explicit additional lifecycles:
 
-- prompts
-- schemas
-- workflows
-- persistence
-- authority
-- business logic
+```bash
+task gateway:deploy
+task observability:deploy
+task oco-consumer:deploy
+```
 
-The runtime layer provides shared inference capacity only.
+`task gateway:observability:deploy` is the convenience path that deploys both
+runtime monitoring and the OCO consumer contract and then validates the gateway
+Prometheus target.
 
-Inference infrastructure is treated as a platform capability rather than a project-owned capability.
+This split is deliberate. `task up` must not be interpreted as "every resource
+owned by the repository is now running."
 
-The architecture exists to maximize resource efficiency, operational simplicity, observability, and future scalability while preserving project independence.
+[Back to top](#navigation)
+
+---
+
+## 12. Non-Goals
+
+This repository does not define:
+
+- agent prompts;
+- planning or review logic;
+- project workflow graphs;
+- application persistence;
+- application-specific admission rules;
+- project-specific quality policy;
+- provider selection semantics for individual application roles.
+
+Those remain consumer responsibilities.
 
 ---
 
