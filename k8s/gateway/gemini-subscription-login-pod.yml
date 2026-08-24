@@ -1,0 +1,71 @@
+# Temporary operator-only helper for Antigravity Google-account authentication.
+# Complete the URL/code login interactively, verify headless access, then delete.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: llm-gemini-subscription-login
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: llm-gemini-subscription-login
+    app.kubernetes.io/component: gateway-auth
+    app.kubernetes.io/part-of: llm-runtime
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  initContainers:
+    - name: antigravity-settings
+      image: llm-runtime-gateway:dev
+      imagePullPolicy: IfNotPresent
+      command: [sh, -ec]
+      args:
+        - |
+          install -d -m 0700 /antigravity-auth/.gemini/antigravity-cli
+          install -m 0600 /etc/llm-runtime-gateway/antigravity-settings.json /antigravity-auth/.gemini/antigravity-cli/settings.json
+      volumeMounts:
+        - name: gemini-auth
+          mountPath: /antigravity-auth
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        capabilities:
+          drop: [ALL]
+  containers:
+    - name: login
+      image: llm-runtime-gateway:dev
+      imagePullPolicy: IfNotPresent
+      command: [sleep, infinity]
+      env:
+        - { name: HOME, value: /antigravity-auth }
+      volumeMounts:
+        - { name: gemini-auth, mountPath: /antigravity-auth }
+        - { name: gemini-tmp, mountPath: /tmp }
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests: { cpu: "50m", memory: "128Mi" }
+        limits: { cpu: "1000m", memory: "1Gi" }
+  volumes:
+    - name: gemini-auth
+      persistentVolumeClaim:
+        claimName: rr-gemini-subscription-auth
+    - name: gemini-tmp
+      emptyDir: {}

@@ -1,6 +1,12 @@
 # Taskfile.yml
 version: "3"
 
+vars:
+  GATEWAY_IMAGE:
+    sh: printf '%s' "${LLM_GATEWAY_IMAGE:-llm-runtime-gateway:dev}"
+  MINIKUBE_PROFILE:
+    sh: printf '%s' "${MINIKUBE_PROFILE:-minikube}"
+
 tasks:
 
   default:
@@ -148,10 +154,132 @@ tasks:
     cmds:
       - ./scripts/vllm-startup-diagnose.sh large
 
+
+  gateway:verify:
+    desc: Typecheck, build, and unit-test the llm-runtime gateway
+    dir: gateway
+    cmds:
+      - npm ci --ignore-scripts
+      - npm run verify
+
+  gateway:image:build:docker:
+    desc: Build the llm-runtime gateway image in the current Docker daemon
+    cmds:
+      - docker build -t {{.GATEWAY_IMAGE}} gateway
+
+  gateway:image:build:
+    desc: Build the llm-runtime gateway image directly into the minikube Docker daemon
+    cmds:
+      - |
+        eval "$(minikube -p {{.MINIKUBE_PROFILE}} docker-env)"
+        docker build -t {{.GATEWAY_IMAGE}} gateway
+
+  gateway:deploy:
+    desc: Deploy the OpenAI-compatible gateway and subscription backends owned by llm-runtime
+    cmds:
+      # The old runtime policy selected every Pod in the namespace. Narrow it
+      # before applying the gateway policy or NetworkPolicy union semantics would
+      # keep port 8000 broadly reachable.
+      - kubectl apply -f k8s/networkpolicy.yml
+      - >-
+        kubectl kustomize k8s/gateway | sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' | kubectl apply -f -
+      - kubectl -n llm-runtime rollout status deployment/llm-openai-api-gateway --timeout=180s
+
+  gateway:delete:
+    desc: Delete the llm-runtime gateway deployment/RBAC while preserving subscription PVCs
+    cmds:
+      - kubectl -n llm-runtime delete deployment llm-openai-api-gateway --ignore-not-found=true
+      - kubectl -n llm-runtime delete service llm-openai-api-gateway --ignore-not-found=true
+      - kubectl -n llm-runtime delete networkpolicy llm-openai-api-gateway --ignore-not-found=true
+      - kubectl -n llm-runtime delete rolebinding rr-pi-llm-service-reader --ignore-not-found=true
+      - kubectl -n llm-runtime delete role rr-pi-llm-service-reader --ignore-not-found=true
+
+  gateway:status:
+    desc: Show gateway deployment, Service, auth PVCs, and current advertised models
+    cmds:
+      - kubectl -n llm-runtime get deployment/llm-openai-api-gateway service/llm-openai-api-gateway pvc/rr-openai-subscription-auth pvc/rr-gemini-subscription-auth
+      - kubectl -n llm-runtime exec deployment/llm-openai-api-gateway -c gateway -- node -e 'fetch("http://127.0.0.1:8000/v1/models").then(async r=>{const t=await r.text(); console.log(t); if(!r.ok)process.exit(1)})'
+
+  gateway:logs:
+    desc: Follow all llm-runtime gateway containers
+    cmds:
+      - kubectl -n llm-runtime logs deployment/llm-openai-api-gateway --all-containers=true -f
+
+  gateway:metrics:
+    desc: Fetch gateway Prometheus metrics from the dedicated metrics port
+    cmds:
+      - kubectl -n llm-runtime exec deployment/llm-openai-api-gateway -c gateway -- node -e 'fetch("http://127.0.0.1:9091/metrics").then(async r=>{const t=await r.text(); process.stdout.write(t); if(!r.ok)process.exit(1)}).catch(e=>{console.error(e);process.exit(1)})'
+
+  gateway:observability:deploy:
+    desc: Deploy Prometheus scrape config and OCO/Grafana dashboard for the gateway
+    cmds:
+      - task: observability:deploy
+      - task: oco-consumer:deploy
+      - task: observability:gateway-target
+
+  gateway:subscription:login:
+    desc: Populate the ChatGPT/Codex OAuth PVC from an interactive helper Pod
+    cmds:
+      - kubectl apply -f k8s/gateway/openai-subscription-auth-pvc.yml
+      - kubectl delete pod -n llm-runtime llm-openai-subscription-login --ignore-not-found=true
+      - >-
+        sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' k8s/gateway/openai-subscription-login-pod.yml | kubectl apply -f -
+      - kubectl wait -n llm-runtime --for=condition=Ready pod/llm-openai-subscription-login --timeout=120s
+      - |
+        set -eu
+        PF_LOG="$(mktemp /tmp/llm-openai-oauth-port-forward.XXXXXX.log)"
+        kubectl -n llm-runtime port-forward --address=127.0.0.1 pod/llm-openai-subscription-login 1455:1455 >"$PF_LOG" 2>&1 &
+        PF_PID=$!
+        cleanup() {
+          kill "$PF_PID" 2>/dev/null || true
+          wait "$PF_PID" 2>/dev/null || true
+          kubectl delete pod -n llm-runtime llm-openai-subscription-login --ignore-not-found=true >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT INT TERM
+        i=0
+        until grep -q 'Forwarding from 127.0.0.1:1455 -> 1455' "$PF_LOG"; do
+          kill -0 "$PF_PID" 2>/dev/null || { cat "$PF_LOG" >&2; exit 1; }
+          i=$((i + 1)); [ "$i" -lt 100 ] || { cat "$PF_LOG" >&2; exit 1; }
+          sleep 0.1
+        done
+        kubectl exec -it -n llm-runtime llm-openai-subscription-login -- \
+          openai-oauth login --no-open --login-timeout-ms 900000 --oauth-file /auth/auth.json
+        kubectl exec -n llm-runtime llm-openai-subscription-login -- test -s /auth/auth.json
+
+  gateway:gemini:login:
+    desc: Populate the Google AI subscription auth PVC using Antigravity CLI and verify cached headless auth
+    cmds:
+      - kubectl apply -f k8s/gateway/gemini-subscription-auth-pvc.yml
+      - kubectl delete pod -n llm-runtime llm-gemini-subscription-login --ignore-not-found=true
+      - >-
+        sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' k8s/gateway/gemini-subscription-login-pod.yml | kubectl apply -f -
+      - kubectl wait -n llm-runtime --for=condition=Ready pod/llm-gemini-subscription-login --timeout=120s
+      - |
+        set -eu
+        cleanup() {
+          kubectl delete pod -n llm-runtime llm-gemini-subscription-login --ignore-not-found=true >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT INT TERM
+        echo 'Antigravity will print the remote OAuth URL/code flow. Complete it with the Google AI subscription account, then exit the TUI.'
+        kubectl exec -it -n llm-runtime llm-gemini-subscription-login -- \
+          env SSH_CONNECTION='127.0.0.1 1 127.0.0.1 1' agy
+        echo 'Verifying persisted account authentication in Antigravity headless mode...'
+        kubectl exec -n llm-runtime llm-gemini-subscription-login -- \
+          agy -p 'Reply with exactly: LLM_RUNTIME_GEMINI_AUTH_OK' --model gemini-3.1-pro-high --output-format json \
+          | tee /tmp/llm-runtime-gemini-auth-check.json \
+          | jq -e '.status == "SUCCESS" and ((.response // "") | contains("LLM_RUNTIME_GEMINI_AUTH_OK"))' >/dev/null
+
+  gateway:gemini:check:
+    desc: End-to-end Gemini subscription smoke through the OpenAI-compatible gateway
+    cmds:
+      - ./scripts/gateway-gemini-check.sh
+
   observability:deploy:
     desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"
     cmds:
       - kubectl apply -k k8s/observability
+      - kubectl -n llm-runtime rollout restart deployment/prometheus
+      - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=120s
 
   observability:delete:
     desc: "Delete runtime metrics resources: Prometheus and DCGM exporter"
@@ -212,20 +340,30 @@ tasks:
   oco-consumer:status:
     desc: Show llm-runtime OCO consumer ConfigMaps and RBAC
     cmds:
-      - kubectl -n llm-runtime get configmap llm-runtime-dashboard llm-runtime-datasource
+      - kubectl -n llm-runtime get configmap llm-runtime-dashboard llm-runtime-gateway-dashboard llm-runtime-datasource
       - kubectl -n llm-runtime get role,rolebinding observability-console-reader
 
   observability:targets:
     desc: Print Prometheus scrape targets API output through cluster DNS
     cmds:
-      - ./scripts/kcurl.sh observability http://prometheus:9090/api/v1/targets | jq .
+      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq .
 
   observability:vllm-targets:
     desc: Show Prometheus target state for vLLM scrape jobs through cluster DNS
     cmds:
-      - ./scripts/kcurl.sh observability http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job | test("^vllm-")) | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job | test("^vllm-")) | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
 
   observability:vllm-up:
     desc: Query Prometheus up metric for vLLM scrape jobs through cluster DNS
     cmds:
-      - ./scripts/kcurl.sh observability 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D~%22vllm-.*%22%7D' | jq .
+      - ./scripts/kcurl.sh llm-runtime 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D~%22vllm-.*%22%7D' | jq .
+
+  observability:gateway-target:
+    desc: Show Prometheus target state for the llm gateway
+    cmds:
+      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job == "llm-gateway") | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+
+  observability:gateway-up:
+    desc: Query Prometheus up metric for the llm gateway
+    cmds:
+      - ./scripts/kcurl.sh llm-runtime 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D%22llm-gateway%22%7D' | jq .

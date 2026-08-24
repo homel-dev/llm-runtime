@@ -11,7 +11,9 @@ metadata:
 
 spec:
 
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: inference
 
   policyTypes:
     - Ingress
@@ -23,3 +25,4 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+

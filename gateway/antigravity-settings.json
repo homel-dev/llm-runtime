@@ -1,0 +1,21 @@
+{
+  "toolPermission": "strict",
+  "artifactReviewPolicy": "asks-for-review",
+  "useG1Credits": false,
+  "enableTelemetry": false,
+  "showTips": false,
+  "showFeedbackSurvey": false,
+  "permissions": {
+    "allow": [],
+    "ask": [],
+    "deny": [
+      "read_file(*)",
+      "write_file(*)",
+      "read_url(*)",
+      "execute_url(*)",
+      "command(*)",
+      "unsandboxed(*)",
+      "mcp(*)"
+    ]
+  }
+}

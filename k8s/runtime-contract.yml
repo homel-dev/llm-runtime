@@ -18,6 +18,8 @@ data:
 
   LLM_LARGE_BASE_URL: "http://llm-large.llm-runtime.svc.cluster.local:8000"
 
+  LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+
   # Runtime metadata
 
   LLM_RUNTIME_NAMESPACE: "llm-runtime"
@@ -25,3 +27,4 @@ data:
   LLM_API_COMPATIBILITY: "openai"
 
   CONTRACT_VERSION: "v1"
+

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rr-gemini-subscription-auth
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: llm-openai-api-gateway
+    app.kubernetes.io/component: gateway-auth
+    app.kubernetes.io/part-of: llm-runtime
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 128Mi

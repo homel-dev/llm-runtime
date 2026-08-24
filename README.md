@@ -301,3 +301,16 @@ The operations document defines deployment and operational procedures.
 ---
 
 **END OF DOCUMENT**
+
+---
+
+## Trusted subscription gateway
+
+`llm-runtime` also owns the cluster's trusted OpenAI-compatible subscription
+gateway at `llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000`, including
+its source, image, auth state, Kubernetes resources, and operator tasks. RR is a
+consumer of this runtime contract; it does not own the gateway implementation.
+
+See [docs/04_gateway.md](docs/04_gateway.md) for the ChatGPT/Codex and Google AI
+subscription backends, Antigravity authentication, deployment, and end-to-end
+smoke checks.
