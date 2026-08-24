@@ -1,4 +1,3 @@
-README.md
 # LLM Runtime
 
 ## Shared LLM Inference Runtime
