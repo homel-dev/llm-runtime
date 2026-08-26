@@ -24,8 +24,8 @@ spec:
     - name: ghcr-pull-secret
   initContainers:
     - name: antigravity-settings
-      image: llm-runtime-gateway:dev
-      imagePullPolicy: IfNotPresent
+      image: ghcr.io/homel-dev/llm-runtime-gateway:main
+      imagePullPolicy: Always
       command: [sh, -ec]
       args:
         - |
@@ -44,8 +44,8 @@ spec:
           drop: [ALL]
   containers:
     - name: login
-      image: llm-runtime-gateway:dev
-      imagePullPolicy: IfNotPresent
+      image: ghcr.io/homel-dev/llm-runtime-gateway:main
+      imagePullPolicy: Always
       command: [sleep, infinity]
       env:
         - { name: HOME, value: /antigravity-auth }

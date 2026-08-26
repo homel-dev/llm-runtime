@@ -20,7 +20,10 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh | bash \
 FROM node:24-bookworm-slim
 ARG OPENAI_OAUTH_VERSION=2.0.0
 COPY --from=antigravity /home/node/.local/bin/agy /usr/local/bin/agy
-RUN npm install -g --ignore-scripts "openai-oauth@${OPENAI_OAUTH_VERSION}" \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g --ignore-scripts "openai-oauth@${OPENAI_OAUTH_VERSION}" \
  && command -v openai-oauth >/dev/null \
  && command -v agy >/dev/null \
  && id -u node | grep -qx 1000 \

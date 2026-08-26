@@ -3,7 +3,7 @@ version: "3"
 
 vars:
   GATEWAY_IMAGE:
-    sh: printf '%s' "${LLM_GATEWAY_IMAGE:-llm-runtime-gateway:dev}"
+    sh: printf '%s' "${LLM_GATEWAY_IMAGE:-ghcr.io/homel-dev/llm-runtime-gateway:main}"
   MINIKUBE_PROFILE:
     sh: printf '%s' "${MINIKUBE_PROFILE:-minikube}"
 
@@ -220,54 +220,12 @@ tasks:
   gateway:subscription:login:
     desc: Populate the ChatGPT/Codex OAuth PVC from an interactive helper Pod
     cmds:
-      - kubectl apply -f k8s/gateway/openai-subscription-auth-pvc.yml
-      - kubectl delete pod -n llm-runtime llm-openai-subscription-login --ignore-not-found=true
-      - >-
-        sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' k8s/gateway/openai-subscription-login-pod.yml | kubectl apply -f -
-      - kubectl wait -n llm-runtime --for=condition=Ready pod/llm-openai-subscription-login --timeout=120s
-      - |
-        set -eu
-        PF_LOG="$(mktemp /tmp/llm-openai-oauth-port-forward.XXXXXX.log)"
-        kubectl -n llm-runtime port-forward --address=127.0.0.1 pod/llm-openai-subscription-login 1455:1455 >"$PF_LOG" 2>&1 &
-        PF_PID=$!
-        cleanup() {
-          kill "$PF_PID" 2>/dev/null || true
-          wait "$PF_PID" 2>/dev/null || true
-          kubectl delete pod -n llm-runtime llm-openai-subscription-login --ignore-not-found=true >/dev/null 2>&1 || true
-        }
-        trap cleanup EXIT INT TERM
-        i=0
-        until grep -q 'Forwarding from 127.0.0.1:1455 -> 1455' "$PF_LOG"; do
-          kill -0 "$PF_PID" 2>/dev/null || { cat "$PF_LOG" >&2; exit 1; }
-          i=$((i + 1)); [ "$i" -lt 100 ] || { cat "$PF_LOG" >&2; exit 1; }
-          sleep 0.1
-        done
-        kubectl exec -it -n llm-runtime llm-openai-subscription-login -- \
-          openai-oauth login --no-open --login-timeout-ms 900000 --oauth-file /auth/auth.json
-        kubectl exec -n llm-runtime llm-openai-subscription-login -- test -s /auth/auth.json
+      - LLM_GATEWAY_IMAGE='{{.GATEWAY_IMAGE}}' ./scripts/gateway-openai-subscription-login.sh
 
   gateway:gemini:login:
     desc: Populate the Google AI subscription auth PVC using Antigravity CLI and verify cached headless auth
     cmds:
-      - kubectl apply -f k8s/gateway/gemini-subscription-auth-pvc.yml
-      - kubectl delete pod -n llm-runtime llm-gemini-subscription-login --ignore-not-found=true
-      - >-
-        sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' k8s/gateway/gemini-subscription-login-pod.yml | kubectl apply -f -
-      - kubectl wait -n llm-runtime --for=condition=Ready pod/llm-gemini-subscription-login --timeout=120s
-      - |
-        set -eu
-        cleanup() {
-          kubectl delete pod -n llm-runtime llm-gemini-subscription-login --ignore-not-found=true >/dev/null 2>&1 || true
-        }
-        trap cleanup EXIT INT TERM
-        echo 'Antigravity will print the remote OAuth URL/code flow. Complete it with the Google AI subscription account, then exit the TUI.'
-        kubectl exec -it -n llm-runtime llm-gemini-subscription-login -- \
-          env SSH_CONNECTION='127.0.0.1 1 127.0.0.1 1' agy
-        echo 'Verifying persisted account authentication in Antigravity headless mode...'
-        kubectl exec -n llm-runtime llm-gemini-subscription-login -- \
-          agy -p 'Reply with exactly: LLM_RUNTIME_GEMINI_AUTH_OK' --model gemini-3.1-pro-high --output-format json \
-          | tee /tmp/llm-runtime-gemini-auth-check.json \
-          | jq -e '.status == "SUCCESS" and ((.response // "") | contains("LLM_RUNTIME_GEMINI_AUTH_OK"))' >/dev/null
+      - LLM_GATEWAY_IMAGE='{{.GATEWAY_IMAGE}}' ./scripts/gateway-gemini-subscription-login.sh
 
   gateway:gemini:check:
     desc: End-to-end Gemini subscription smoke through the OpenAI-compatible gateway

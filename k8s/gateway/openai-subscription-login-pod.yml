@@ -23,7 +23,7 @@ spec:
     - name: ghcr-pull-secret
   containers:
     - name: login
-      image: llm-runtime-gateway:dev
+      image: ghcr.io/homel-dev/llm-runtime-gateway:main
       imagePullPolicy: IfNotPresent
       command: [sleep, infinity]
       env:

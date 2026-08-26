@@ -36,8 +36,8 @@ spec:
         - name: ghcr-pull-secret
       initContainers:
         - name: antigravity-settings
-          image: llm-runtime-gateway:dev
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/homel-dev/llm-runtime-gateway:main
+          imagePullPolicy: Always
           command: [sh, -ec]
           args:
             - |
@@ -56,8 +56,8 @@ spec:
               drop: [ALL]
       containers:
         - name: gateway
-          image: llm-runtime-gateway:dev
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/homel-dev/llm-runtime-gateway:main
+          imagePullPolicy: Always
           command: [node, /app/dist/src/run.js]
           ports:
             - name: http
@@ -104,8 +104,8 @@ spec:
             limits: { cpu: "500m", memory: "256Mi" }
 
         - name: subscription
-          image: llm-runtime-gateway:dev
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/homel-dev/llm-runtime-gateway:main
+          imagePullPolicy: Always
           command: [openai-oauth]
           env:
             - { name: HOME, value: /auth/home }
@@ -136,7 +136,7 @@ spec:
             limits: { cpu: "1000m", memory: "512Mi" }
 
         - name: gemini-subscription
-          image: llm-runtime-gateway:dev
+          image: ghcr.io/homel-dev/llm-runtime-gateway:main
           imagePullPolicy: IfNotPresent
           command: [node, /app/dist/src/run-antigravity.js]
           env:
