@@ -137,7 +137,7 @@ spec:
 
         - name: gemini-subscription
           image: ghcr.io/homel-dev/llm-runtime-gateway:main
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: [node, /app/dist/src/run-antigravity.js]
           env:
             - { name: HOME, value: /antigravity-auth }
@@ -151,21 +151,30 @@ spec:
           volumeMounts:
             - { name: gemini-auth, mountPath: /antigravity-auth }
             - { name: gemini-tmp, mountPath: /tmp }
+          startupProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10532/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
           readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 10532
-              host: 127.0.0.1
-            initialDelaySeconds: 2
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10532/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 12
           livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 10532
-              host: 127.0.0.1
-            initialDelaySeconds: 10
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10532/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 3

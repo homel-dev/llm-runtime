@@ -183,6 +183,7 @@ tasks:
       - kubectl apply -f k8s/networkpolicy.yml
       - >-
         kubectl kustomize k8s/gateway | sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' | kubectl apply -f -
+      - kubectl -n llm-runtime rollout restart deployment/llm-openai-api-gateway
       - kubectl -n llm-runtime rollout status deployment/llm-openai-api-gateway --timeout=180s
 
   gateway:delete:
