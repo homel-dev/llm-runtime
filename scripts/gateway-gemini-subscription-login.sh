@@ -29,12 +29,5 @@ kubectl delete pod -n "$namespace" "$pod" --ignore-not-found=true
 sed "s#image: llm-runtime-gateway:dev#image: ${image}#g" "$pod_manifest" | kubectl apply -f -
 kubectl wait -n "$namespace" --for=condition=Ready "pod/$pod" --timeout=120s
 
-echo 'Antigravity will print the remote OAuth URL/code flow. Complete it with the Google AI subscription account, then exit the TUI.'
 kubectl exec -it -n "$namespace" "$pod" -- \
-  env SSH_CONNECTION='127.0.0.1 1 127.0.0.1 1' agy
-
-echo 'Verifying persisted account authentication in Antigravity headless mode...'
-kubectl exec -n "$namespace" "$pod" -- \
-  agy -p 'Reply with exactly: LLM_RUNTIME_GEMINI_AUTH_OK' --model gemini-3.1-pro-high --output-format json \
-  | tee /tmp/llm-runtime-gemini-auth-check.json \
-  | jq -e '.status == "SUCCESS" and ((.response // "") | contains("LLM_RUNTIME_GEMINI_AUTH_OK"))' >/dev/null
+  node /app/dist/src/run-antigravity-login.js
