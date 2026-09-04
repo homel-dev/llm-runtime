@@ -184,8 +184,7 @@ task gateway:gemini:login
 The task creates a temporary Pod, launches `agy` with interactive account
 authentication, and persists credential state on
 `rr-gemini-subscription-auth`. After authentication it runs a non-interactive
-`gemini-3.1-pro-high` prompt and fails unless Antigravity reports success and
-returns the expected marker.
+`gemini-3.1-pro-high` prompt against the cached account state.
 
 The auth PVC names remain `rr-openai-subscription-auth` and
 `rr-gemini-subscription-auth` so an existing RR-owned installation can be
@@ -207,16 +206,20 @@ task gateway:deploy
 task gateway:status
 ```
 
-Validate the Google AI provider path end to end:
+Validate each subscription path or every advertised gateway model end to end:
 
 ```bash
+task gateway:openai:check
 task gateway:gemini:check
+task gateway:check
 ```
 
-The check executes inside the router container, sends an OpenAI Chat
-Completions request to `127.0.0.1:8000`, routes it to the Antigravity adapter
-over Pod loopback, and invokes the authenticated subscription model. It exits
-non-zero unless the expected marker is returned.
+Each check executes inside the router container and sends real OpenAI Chat
+Completions requests to `127.0.0.1:8000`. Provider-specific tasks select only
+that subscription backend; `gateway:check` discovers `/v1/models` and checks
+every advertised model across all registered backends. A check requires HTTP
+success, valid JSON, and non-empty assistant content and returns non-zero after
+reporting every failed model.
 
 A ready Deployment or successful `/v1/models` response is insufficient to
 accept provider health.

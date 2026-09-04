@@ -249,12 +249,12 @@ Authentication state is persisted independently of gateway Pods.
 Populate or refresh account state with:
 
 ```bash
-task gateway:subscription:login
+task gateway:openai:login
 ```
 
-The helper uses PVC `rr-openai-subscription-auth`, executes interactive
-`openai-oauth` authentication, and verifies that `/auth/auth.json` was
-persisted.
+The helper uses PVC `rr-openai-subscription-auth`, runs the pinned Codex CLI
+device-auth flow, verifies that `/auth/auth.json` was persisted, and checks the
+cached login status.
 
 ### Google AI
 
@@ -299,16 +299,26 @@ Fetch raw gateway metrics:
 task gateway:metrics
 ```
 
-Run the end-to-end Google AI subscription check:
+Run provider-specific end-to-end checks:
 
 ```bash
+task gateway:openai:check
 task gateway:gemini:check
 ```
 
-The end-to-end check sends an OpenAI Chat Completions request to the router,
-selects the Antigravity adapter over Pod loopback, and invokes the cached Google
-AI subscription. The task exits non-zero unless the expected marker is
-returned.
+Run the aggregate check after deployment, restart, authentication changes, or
+rollback:
+
+```bash
+task gateway:check
+```
+
+The check first reads `/v1/models`, then sends a real non-streaming Chat
+Completions request through the router for every advertised model selected by
+the command. It requires an HTTP success, valid JSON, and non-empty assistant
+content. Provider-specific tasks filter by the gateway-owned backend; the
+aggregate task checks every advertised model across every registered backend
+and reports all failures before returning non-zero.
 
 A passing unit suite, ready Pod, or successful `/v1/models` response does not
 prove provider authentication, quota, or inference availability. Provider
@@ -492,7 +502,7 @@ Validate the rollback:
 
 ```bash
 task gateway:status
-task gateway:gemini:check
+task gateway:check
 task observability:gateway-up
 ```
 
@@ -532,7 +542,7 @@ Then validate behavior:
 task llm:health-small
 task llm:health-medium
 task llm:health-large
-task gateway:gemini:check
+task gateway:check
 task observability:vllm-up
 task observability:gateway-up
 ```
