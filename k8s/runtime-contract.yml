@@ -12,13 +12,17 @@ data:
 
   # Stable runtime endpoints
 
-  LLM_SMALL_BASE_URL: "http://llm-small.llm-runtime.svc.cluster.local:8000"
+  LLM_SMALL_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 
-  LLM_MEDIUM_BASE_URL: "http://llm-medium.llm-runtime.svc.cluster.local:8000"
+  LLM_MEDIUM_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 
-  LLM_LARGE_BASE_URL: "http://llm-large.llm-runtime.svc.cluster.local:8000"
+  LLM_LARGE_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 
   LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+
+  LLM_SMALL_MODEL: "llm-small"
+  LLM_MEDIUM_MODEL: "llm-medium"
+  LLM_LARGE_MODEL: "llm-large"
 
   # Runtime metadata
 
@@ -26,5 +30,5 @@ data:
 
   LLM_API_COMPATIBILITY: "openai"
 
-  CONTRACT_VERSION: "v1"
+  CONTRACT_VERSION: "v2"
 

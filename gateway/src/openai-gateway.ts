@@ -17,15 +17,20 @@ import { checkSubscriptionResponseOutputBudget } from "./subscription-response-p
  *  - subscription: loopback OpenAI-compatible OAuth proxy (openai-oauth) that
  *    owns the ChatGPT/Codex OAuth session and refresh lifecycle;
  *  - gemini-subscription: loopback Antigravity adapter. The adapter invokes Google Antigravity CLI
- *    using a cached Google-account subscription session.
+ *    using a cached Google-account subscription session;
+ *  - local-small/local-medium/local-large: trusted in-cluster OpenAI-compatible
+ *    model servers. Consumers never receive these upstream Service addresses.
  */
+export type GatewayBackendId = "api" | "subscription" | "gemini-subscription" | "local-small" | "local-medium" | "local-large";
+
 export interface GatewayBackend {
-  id: "api" | "subscription" | "gemini-subscription";
+  id: GatewayBackendId;
   protocol: "http" | "https";
   host: string;
   port: number;
   models: string[];
   apiKey?: string;
+  modelMap?: Record<string, string>;
 }
 
 export interface GatewayConfig {
@@ -59,6 +64,42 @@ function validDnsHost(label: string, host: string): string {
   return host;
 }
 
+function modelMapFromEnv(label: string, value: string | undefined, models: string[]): Record<string, string> {
+  const out = Object.fromEntries(models.map((model) => [model, model]));
+  if (!value) return out;
+  const seen = new Set<string>();
+  for (const entry of value.split(",").map((item) => item.trim()).filter(Boolean)) {
+    const eq = entry.indexOf("=");
+    if (eq <= 0 || eq === entry.length - 1) throw new Error(`${label} entry '${entry}' must be exposed-model=upstream-model`);
+    const exposed = entry.slice(0, eq).trim();
+    const upstream = entry.slice(eq + 1).trim();
+    if (!models.includes(exposed)) throw new Error(`${label} references undeclared exposed model '${exposed}'`);
+    if (seen.has(exposed)) throw new Error(`${label} contains duplicate mapping for '${exposed}'`);
+    seen.add(exposed);
+    out[exposed] = upstream;
+  }
+  return out;
+}
+
+type LocalTier = "small" | "medium" | "large";
+const LOCAL_TIERS: LocalTier[] = ["small", "medium", "large"];
+
+function localBackendFromEnv(env: NodeJS.ProcessEnv, tier: LocalTier): GatewayBackend | undefined {
+  const upper = tier.toUpperCase();
+  const prefix = `GATEWAY_LOCAL_${upper}_`;
+  const models = csvEnv(env[`${prefix}MODELS`], []);
+  if (!models.length) return undefined;
+  const id = `local-${tier}` as GatewayBackendId;
+  return {
+    id,
+    protocol: "http",
+    host: validDnsHost(`${prefix}HOST`, env[`${prefix}HOST`] ?? `llm-${tier}.llm-runtime.svc.cluster.local`),
+    port: validPort(`${prefix}PORT`, Number(env[`${prefix}PORT`] ?? "8000")),
+    models,
+    modelMap: modelMapFromEnv(`${prefix}MODEL_MAP`, env[`${prefix}MODEL_MAP`], models),
+  };
+}
+
 export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
   const listenPort = validPort("GATEWAY_LISTEN_PORT", Number(env.GATEWAY_LISTEN_PORT ?? "8000"));
   const metricsPort = validPort("GATEWAY_METRICS_PORT", Number(env.GATEWAY_METRICS_PORT ?? "9091"));
@@ -77,9 +118,13 @@ export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
   const apiModels = csvEnv(env.GATEWAY_API_MODELS ?? env.GATEWAY_ALLOWED_MODELS, []);
   const subscriptionModels = csvEnv(env.GATEWAY_SUBSCRIPTION_MODELS, []);
   const geminiModels = csvEnv(env.GATEWAY_GEMINI_MODELS, []);
+  const localBackends = LOCAL_TIERS.map((tier) => localBackendFromEnv(env, tier)).filter((backend): backend is GatewayBackend => backend !== undefined);
   const assignments = new Map<string, string[]>();
   for (const [backend, models] of [["api", apiModels], ["subscription", subscriptionModels], ["gemini-subscription", geminiModels]] as const) {
     for (const model of models) assignments.set(model, [...(assignments.get(model) ?? []), backend]);
+  }
+  for (const backend of localBackends) {
+    for (const model of backend.models) assignments.set(model, [...(assignments.get(model) ?? []), backend.id]);
   }
   const overlap = [...assignments.entries()].filter(([, owners]) => owners.length > 1).map(([model]) => model);
   if (overlap.length) throw new Error(`models cannot be assigned to multiple gateway backends: ${overlap.join(",")}`);
@@ -123,7 +168,8 @@ export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
       models: geminiModels,
     });
   }
-  if (!backends.length) throw new Error("at least one gateway backend must be configured via GATEWAY_API_MODELS, GATEWAY_SUBSCRIPTION_MODELS, or GATEWAY_GEMINI_MODELS");
+  backends.push(...localBackends);
+  if (!backends.length) throw new Error("at least one gateway backend must be configured via API, subscription, Gemini, or GATEWAY_LOCAL_<TIER>_MODELS");
 
   return { listenPort, metricsPort, maxBodyBytes, upstreamTimeoutMs, allowedEndpoints, maxOutputTokens, backends };
 }
@@ -190,7 +236,7 @@ export function applyBodyPolicy(pathname: string, body: Buffer, config: GatewayC
       parsed.max_output_tokens = outputTokenLimit;
     } else if (pathname === "/v1/chat/completions" || pathname === "/v1/completions") {
       delete parsed.max_output_tokens;
-      if (selectedBackend?.id === "subscription") {
+      if (selectedBackend?.id === "subscription" || selectedBackend?.id.startsWith("local-")) {
         parsed.max_tokens = outputTokenLimit;
         delete parsed.max_completion_tokens;
       } else {
@@ -199,6 +245,8 @@ export function applyBodyPolicy(pathname: string, body: Buffer, config: GatewayC
       }
     }
   }
+  if (model && selectedBackend?.modelMap?.[model]) parsed.model = selectedBackend.modelMap[model];
+
   return {
     ok: true,
     body: Buffer.from(JSON.stringify(parsed), "utf8"),

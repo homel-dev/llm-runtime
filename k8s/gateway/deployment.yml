@@ -74,6 +74,14 @@ spec:
             - { name: GATEWAY_GEMINI_MODELS, value: "gemini-subscription-pro,gemini-subscription-auto" }
             - { name: GATEWAY_GEMINI_HOST, value: "127.0.0.1" }
             - { name: GATEWAY_GEMINI_PORT, value: "10532" }
+            - { name: GATEWAY_LOCAL_SMALL_MODELS, value: "llm-small" }
+            - { name: GATEWAY_LOCAL_SMALL_MODEL_MAP, value: "llm-small=Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M" }
+            - { name: GATEWAY_LOCAL_SMALL_HOST, value: "llm-small.llm-runtime.svc.cluster.local" }
+            - { name: GATEWAY_LOCAL_SMALL_PORT, value: "8000" }
+            - { name: GATEWAY_LOCAL_LARGE_MODELS, value: "llm-large" }
+            - { name: GATEWAY_LOCAL_LARGE_MODEL_MAP, value: "llm-large=Qwen2.5-72B-Instruct-AWQ" }
+            - { name: GATEWAY_LOCAL_LARGE_HOST, value: "llm-large.llm-runtime.svc.cluster.local" }
+            - { name: GATEWAY_LOCAL_LARGE_PORT, value: "8000" }
             - { name: GATEWAY_MAX_OUTPUT_TOKENS, value: "4096" }
           readinessProbe:
             httpGet:
@@ -260,6 +268,12 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: inference
+      ports:
+        - { protocol: TCP, port: 8000 }
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

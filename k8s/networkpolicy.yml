@@ -23,7 +23,12 @@ spec:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector: {}      # any consumer namespace may call the runtime
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: llm-openai-api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
           port: 8000
@@ -50,6 +55,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: observability-console
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-operator-check
       ports:
         - protocol: TCP
           port: 9090

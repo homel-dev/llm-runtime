@@ -17,6 +17,7 @@ kubectl -n "${namespace}" run "${name}" \
   --rm \
   -i \
   --restart=Never \
+  --labels=app.kubernetes.io/name=runtime-operator-check,app.kubernetes.io/part-of=llm-runtime \
   --image="${image}" \
   --quiet \
   --command -- \

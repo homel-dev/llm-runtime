@@ -1,30 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <small|medium|large>" >&2
-  exit 2
-fi
+tier="${1:?usage: $0 <small|medium|large>}"
+namespace="${LLM_RUNTIME_NAMESPACE:-llm-runtime}"
+deployment="${LLM_GATEWAY_DEPLOYMENT:-llm-openai-api-gateway}"
+url="http://llm-${tier}.llm-runtime.svc.cluster.local:8000/metrics"
 
-tier="$1"
-metrics_url="http://llm-${tier}:8000/metrics"
-
-echo "checking ${metrics_url}"
-
-payload="$(./scripts/kcurl.sh llm-runtime "${metrics_url}")"
-
-if [[ -z "${payload}" ]]; then
-  echo "metrics endpoint returned an empty response" >&2
-  exit 1
-fi
-
-if ! grep -Eq '(^# HELP |^vllm[:_]|^process_|^python_)' <<<"${payload}"; then
-  echo "metrics endpoint responded, but no recognizable Prometheus/vLLM metrics were found" >&2
-  exit 1
-fi
-
-printf '%s\n' "${payload}" \
-  | awk '/^# HELP / { print $3 } /^[a-zA-Z_:][a-zA-Z0-9_:]*/ { print $1 }' \
-  | sed 's/{.*//' \
-  | sort -u \
-  | head -100
+kubectl -n "$namespace" exec "deployment/$deployment" -c gateway -- \
+  env RUNTIME_METRICS_URL="$url" \
+  node -e 'const u=process.env.RUNTIME_METRICS_URL; fetch(u).then(async r=>{const t=await r.text();process.stdout.write(t);if(!r.ok)process.exit(1)}).catch(e=>{console.error(e);process.exit(1)})'

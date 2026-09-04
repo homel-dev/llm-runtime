@@ -226,7 +226,7 @@ tasks:
   gateway:openai:check:
     desc: End-to-end ChatGPT/Codex subscription check through the OpenAI-compatible gateway
     cmds:
-      - ./scripts/gateway-check.sh openai
+      - ./scripts/gateway-check-models.sh openai
 
   gateway:gemini:login:
     desc: Populate the Google AI subscription auth PVC using Antigravity CLI and verify cached headless auth
@@ -236,12 +236,17 @@ tasks:
   gateway:gemini:check:
     desc: End-to-end Google AI subscription check through the OpenAI-compatible gateway
     cmds:
-      - ./scripts/gateway-check.sh gemini
+      - ./scripts/gateway-check-models.sh gemini
+
+  gateway:local:check:
+    desc: End-to-end check every advertised local inference model through the gateway
+    cmds:
+      - ./scripts/gateway-check-models.sh local
 
   gateway:check:
     desc: End-to-end check every model advertised by all registered gateway backends
     cmds:
-      - ./scripts/gateway-check.sh all
+      - ./scripts/gateway-check-models.sh all
 
   observability:deploy:
     desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"
