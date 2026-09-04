@@ -95,8 +95,15 @@ adapter uses these headless interfaces:
 - `--input-format stream-json` with NDJSON prompt input;
 - `--output-format stream-json`;
 - an explicit `--model` slug;
-- `--json-schema` for the adapter transport envelope;
+- caller `response_format` JSON Schema mapped directly to Antigravity `--json-schema` when structured output is requested;
 - cached account authentication created by an interactive login.
+
+The adapter does not ask the model to manufacture a gateway transport envelope.
+For plain text completions, the provider `result.response` string becomes the
+OpenAI-compatible assistant content without trimming, fence removal, JSON
+parsing, or other interpretation. Function/tool calling and token-streaming are
+rejected until deterministic native mappings exist rather than being emulated by
+a model prompt or synthetic SSE.
 
 The adapter removes Gemini API-key and Vertex credential environment variables
 before spawning `agy`. This prevents an inherited parent environment from
@@ -128,7 +135,7 @@ Build a local Minikube image with:
 task gateway:image:build
 ```
 
-The gateway image verifies `agy --version` during image construction.
+The gateway image verifies the pinned `agy` artifact checksum, version, and required headless flags during image construction.
 
 ### GitHub Actions image build
 
@@ -156,10 +163,11 @@ The Deployment references `imagePullSecrets: [{name: ghcr-pull-secret}]`.
 Private GHCR packages therefore require that Secret in `llm-runtime` before
 image pull.
 
-The current Dockerfile installs the then-current official Antigravity CLI
-release. The produced GHCR digest is immutable, but rebuilding the same git
-commit later is not guaranteed to produce an identical image until the
-Antigravity dependency is version-pinned.
+The Dockerfile pins Antigravity CLI `1.1.26` build `5550154686791680` by
+its official Google Storage artifact and verifies the Linux x86_64 SHA-256
+before installation. The image build also checks that the required headless CLI
+flags are present. Updating Antigravity therefore requires an explicit source
+change and produces a reviewable gateway-image diff.
 
 [Back to top](#llm-gateway)
 
@@ -285,14 +293,29 @@ undetected until traffic or an explicit provider check exercises them.
 
 ## API Limitations
 
-Gemini subscription routing supports OpenAI Chat Completions.
-`/v1/responses` returns HTTP 501 for Gemini subscription models.
+Gemini subscription routing supports non-streaming OpenAI Chat Completions
+for text output. `response_format: {type: "json_object"}` and
+`response_format: {type: "json_schema", ...}` are enforced with Antigravity's
+native `--json-schema` facility. `/v1/responses` returns HTTP 501 for Gemini
+subscription models.
 
-OpenAI function calling is represented through a schema-constrained transport
-envelope and validated against declared function names.
+Gemini function/tool calling, tool-call history, and `stream: true` fail closed
+until deterministic native mappings exist. The gateway does not synthesize tool
+calls or buffered SSE and does not ask the model to emit a transport envelope.
 
-`stream: true` returns OpenAI-compatible SSE framing after the Antigravity
-result completes. It is not upstream token-by-token streaming.
+Output-token limits are capability-aware. The effective limit is the smaller of
+the client-requested limit and `GATEWAY_MAX_OUTPUT_TOKENS` when the gateway cap
+is enabled. ChatGPT/Codex OAuth rejects native `max_output_tokens`, so
+subscription non-streaming responses are buffered only until their upstream
+usage can be verified; verified responses retain their exact upstream body
+bytes. Missing/untrustworthy usage or an over-limit result fails closed, and
+subscription streaming fails closed while a limit is active because already
+emitted SSE bytes cannot be revoked. With no client or gateway limit,
+subscription responses remain raw passthrough. Gemini's CLI likewise has no
+native output-token limit, so the adapter verifies Antigravity usage before
+releasing a completed response. These checks bound what reaches the consumer;
+they do not claim to cap provider-side generation cost for subscription-backed
+transports.
 
 Unsupported paths or provider capabilities fail explicitly.
 
@@ -313,9 +336,9 @@ Account-backed subscription transport depends on external provider behavior,
 quota, and credential freshness. Kubernetes readiness cannot prove those
 properties.
 
-The current Antigravity installation is not version-pinned. Image digests are
-immutable after publication, but rebuilding the same source commit can resolve
-a different Antigravity release.
+Antigravity is version- and checksum-pinned in the gateway image. Provider
+transport upgrades are therefore explicit source changes rather than implicit
+rebuild-time dependency changes.
 
 The gateway does not implement consumer fallback authority. Authentication
 failure, provider rejection, quota exhaustion, timeout, unsupported API shape,

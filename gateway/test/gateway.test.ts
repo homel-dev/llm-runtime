@@ -14,7 +14,7 @@ import {
 } from "../src/openai-gateway.js";
 import {
   createAntigravityAdapter, loadAntigravityAdapterConfigFromEnv, runAntigravityCli,
-  type AntigravityAdapterConfig, type AntigravityCliInvocation, type AntigravityCliResult,
+  type AntigravityAdapterConfig, type AntigravityCliInvocation, type AntigravityCliResult, type AntigravityCliRunner,
 } from "../src/antigravity-adapter.js";
 
 const apiBackend: GatewayBackend = {
@@ -92,7 +92,7 @@ function fakeRequester(captured: Captured[]): UpstreamRequester {
     req.write = (c: Buffer) => { chunks.push(Buffer.from(c)); return true; };
     req.end = () => {
       captured.push({ backend, options, body: Buffer.concat(chunks).toString("utf8") });
-      const res = Readable.from([Buffer.from(JSON.stringify({ ok: true }))]) as unknown as IncomingMessage;
+      const res = Readable.from([Buffer.from(JSON.stringify({ ok: true, usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, input_tokens: 1, output_tokens: 1 } }))]) as unknown as IncomingMessage;
       (res as any).statusCode = 200;
       (res as any).headers = { "content-type": "application/json", "set-cookie": ["should-be-dropped"] };
       onResponse(res);
@@ -192,6 +192,158 @@ test("disallowed endpoint and method are refused before any upstream call", asyn
 });
 
 
+test("output-token policy preserves lower client limits and normalizes to backend-native fields", () => {
+  const subscription = applyBodyPolicy("/v1/chat/completions", Buffer.from(JSON.stringify({ model: "gpt-sub", max_completion_tokens: 64 })), base);
+  assert.equal(subscription.ok, true);
+  assert.equal(subscription.outputTokenLimit, 64);
+  const subscriptionBody = JSON.parse(subscription.body.toString());
+  assert.equal(subscriptionBody.max_tokens, 64);
+  assert.equal(subscriptionBody.max_completion_tokens, undefined);
+  assert.equal(subscriptionBody.max_output_tokens, undefined);
+
+  const gemini = applyBodyPolicy("/v1/chat/completions", Buffer.from(JSON.stringify({ model: "gemini-subscription-pro", max_tokens: 32 })), base);
+  assert.equal(gemini.ok, true);
+  assert.equal(gemini.outputTokenLimit, 32);
+  const geminiBody = JSON.parse(gemini.body.toString());
+  assert.equal(geminiBody.max_completion_tokens, 32);
+  assert.equal(geminiBody.max_tokens, undefined);
+  assert.equal(geminiBody.max_output_tokens, undefined);
+
+  const apiResponses = applyBodyPolicy("/v1/responses", Buffer.from(JSON.stringify({ model: "gpt-api", max_completion_tokens: 12 })), base);
+  assert.equal(apiResponses.ok, true);
+  assert.equal(apiResponses.outputTokenLimit, 12);
+  const responsesBody = JSON.parse(apiResponses.body.toString());
+  assert.equal(responsesBody.max_output_tokens, 12);
+  assert.equal(responsesBody.max_tokens, undefined);
+  assert.equal(responsesBody.max_completion_tokens, undefined);
+
+  const uncapped: GatewayConfig = { ...base, maxOutputTokens: 0 };
+  const clientOnly = applyBodyPolicy("/v1/chat/completions", Buffer.from(JSON.stringify({ model: "gpt-sub", max_tokens: 17 })), uncapped);
+  assert.equal(clientOnly.outputTokenLimit, 17);
+});
+
+function staticResponseRequester(
+  responseBody: string,
+  status = 200,
+  responseHeaders: Record<string, string | string[]> = { "content-type": "application/json" },
+  captured: Captured[] = [],
+): UpstreamRequester {
+  return (backend, options, onResponse) => {
+    const requestChunks: Buffer[] = [];
+    const req = new EventEmitter() as any;
+    req.write = (chunk: Buffer) => { requestChunks.push(Buffer.from(chunk)); return true; };
+    req.end = () => {
+      captured.push({ backend, options, body: Buffer.concat(requestChunks).toString("utf8") });
+      const response = Readable.from([Buffer.from(responseBody)]) as unknown as IncomingMessage;
+      (response as any).statusCode = status;
+      (response as any).headers = responseHeaders;
+      onResponse(response);
+    };
+    req.destroy = () => {};
+    return req as any;
+  };
+}
+
+test("router preserves API upstream response bytes and status exactly while dropping credential headers", async () => {
+  const opaque = '  {"answer":"μ\\nline","opaque":[1,2]}  \n';
+  const server = createGateway(base, staticResponseRequester(opaque, 207, {
+    "content-type": "application/json",
+    "x-provider-header": "opaque-value",
+    "set-cookie": ["must-not-reach-client=1"],
+  }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-api" }));
+    assert.equal(res.status, 207);
+    assert.equal(res.body, opaque);
+    assert.equal(res.headers["x-provider-header"], "opaque-value");
+    assert.equal(res.headers["set-cookie"], undefined);
+  } finally { server.close(); }
+});
+
+test("router preserves verified OpenAI subscription response bytes exactly", async () => {
+  const opaque = ' { "choices": [{"message":{"content":"exact"}}], "usage": { "prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12 } } \n';
+  const captured: Captured[] = [];
+  const server = createGateway(base, staticResponseRequester(opaque, 200, { "content-type": "application/json" }, captured));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", max_completion_tokens: 8 }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, opaque);
+    const forwarded = JSON.parse(captured[0]!.body);
+    assert.equal(forwarded.max_tokens, 8);
+    assert.equal(forwarded.max_completion_tokens, undefined);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription response fails closed when provider output exceeds the effective client limit", async () => {
+  const upstream = JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 9, total_tokens: 14 } });
+  const server = createGateway(base, staticResponseRequester(upstream));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /gateway_output_policy_error/);
+    assert.match(res.body, /9 > 8/);
+    assert.doesNotMatch(res.body, /\"choices\":\[\]/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription response fails closed on untrustworthy zero-fallback usage", async () => {
+  const upstream = JSON.stringify({ choices: [{ message: { content: "non-empty" } }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
+  const server = createGateway(base, staticResponseRequester(upstream));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub" }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /no trustworthy token usage/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming fails closed before upstream when an output-token limit is active", async () => {
+  const captured: Captured[] = [];
+  const server = createGateway(base, fakeRequester(captured));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true }));
+    assert.equal(res.status, 501);
+    assert.match(res.body, /streaming is disabled while an output-token limit is active/);
+    assert.equal(captured.length, 0);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription Responses API validates output_tokens and preserves verified bytes", async () => {
+  const opaque = ' { "id":"resp_provider", "output": [], "usage": { "input_tokens": 5, "output_tokens": 9, "total_tokens": 14 } }\n';
+  const server = createGateway(base, staticResponseRequester(opaque));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", max_output_tokens: 10, input: "x" }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, opaque);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription remains raw passthrough when neither gateway nor client requests an output-token limit", async () => {
+  const uncapped: GatewayConfig = { ...base, maxOutputTokens: 0 };
+  const opaque = 'data: {"opaque":true}\n\ndata: [DONE]\n\n';
+  const captured: Captured[] = [];
+  const server = createGateway(uncapped, staticResponseRequester(opaque, 200, { "content-type": "text/event-stream" }, captured));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, opaque);
+    assert.equal(JSON.parse(captured[0]!.body).stream, true);
+  } finally { server.close(); }
+});
+
 const antigravityConfig: AntigravityAdapterConfig = {
   listenPort: 0,
   maxBodyBytes: 1024 * 1024,
@@ -228,11 +380,11 @@ function antigravityRunner(response: string, captures: AntigravityCliInvocation[
   };
 }
 
-test("Antigravity CLI runner uses stream-json stdin, structured output, an isolated workdir, and subscription-only auth env", async () => {
+test("Antigravity CLI runner uses native stream-json, caller schema, isolated workdir, and subscription-only auth env", async () => {
   const root = mkdtempSync(join(tmpdir(), "llm-runtime-antigravity-runner-test-"));
   const cli = join(root, "fake-agy");
   writeFileSync(cli, `#!/usr/bin/env node
-let input="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>input+=c);process.stdin.on("end",()=>{const result={type:"assistant",content:"ok"};process.stdout.write(JSON.stringify({event:"result",result:{status:"SUCCESS",response:JSON.stringify(result),structured_output:result,usage:{input_tokens:1,output_tokens:1},observed:{input,cwd:process.cwd(),argv:process.argv.slice(2),apiKey:process.env.GEMINI_API_KEY??null,vertex:process.env.GOOGLE_GENAI_USE_VERTEXAI??null}}})+"\\n")});
+let input="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>input+=c);process.stdin.on("end",()=>{process.stdout.write(JSON.stringify({event:"result",result:{status:"SUCCESS",response:"ok",usage:{input_tokens:1,output_tokens:1,total_tokens:2},observed:{input,cwd:process.cwd(),argv:process.argv.slice(2),apiKey:process.env.GEMINI_API_KEY??null,vertex:process.env.GOOGLE_GENAI_USE_VERTEXAI??null}}})+"\\n")});
 `);
   chmodSync(cli, 0o755);
   const oldApiKey = process.env.GEMINI_API_KEY;
@@ -240,8 +392,9 @@ let input="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>input+
   process.env.GEMINI_API_KEY = "must-not-reach-cli";
   process.env.GOOGLE_GENAI_USE_VERTEXAI = "true";
   try {
+    const schema = JSON.stringify({ type: "object", properties: { answer: { type: "integer" } }, required: ["answer"] });
     const result = await runAntigravityCli({
-      model: "gemini-3.1-pro-high", protocolPrompt: "GATEWAY_PROTOCOL_PAYLOAD", timeoutMs: 5000,
+      model: "gemini-3.1-pro-high", prompt: "PROVIDER_PROMPT", jsonSchema: schema, timeoutMs: 5000,
       maxStdoutBytes: 1024 * 1024, maxStderrBytes: 1024 * 1024,
       cliPath: cli, workDir: join(root, "work"),
     });
@@ -250,11 +403,13 @@ let input="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>input+
     const observed = event.result.observed;
     const inputEvent = JSON.parse(observed.input.trim());
     assert.equal(inputEvent.event, "user");
-    assert.equal(inputEvent.message.content, "GATEWAY_PROTOCOL_PAYLOAD");
+    assert.equal(inputEvent.message.content, "PROVIDER_PROMPT");
     assert.equal(observed.apiKey, null);
     assert.equal(observed.vertex, null);
     assert.deepEqual(observed.argv.slice(0, 6), ["--input-format", "stream-json", "--output-format", "stream-json", "--model", "gemini-3.1-pro-high"]);
-    assert.ok(observed.argv.includes("--json-schema"));
+    const schemaIndex = observed.argv.indexOf("--json-schema");
+    assert.ok(schemaIndex > 0);
+    assert.equal(observed.argv[schemaIndex + 1], schema);
     assert.ok(observed.argv.includes("--sandbox"));
     assert.match(observed.cwd, /request-/);
     assert.equal(existsSync(observed.cwd), false, "per-request Antigravity workdir is removed after execution");
@@ -274,78 +429,113 @@ test("Gemini subscription adapter config supports a stable gateway alias mapped 
   assert.throws(() => loadAntigravityAdapterConfigFromEnv({ ANTIGRAVITY_ADAPTER_MODELS: "a", ANTIGRAVITY_ADAPTER_MODEL_MAP: "b=gemini-3.1-pro-high" }), /not present/);
 });
 
-test("Gemini subscription adapter converts a text completion and passes the protocol over stdin to the Antigravity CLI runner", async () => {
+test("Gemini adapter preserves provider response text exactly without parsing a gateway envelope", async () => {
   const captures: AntigravityCliInvocation[] = [];
-  const server = createAntigravityAdapter(antigravityConfig, antigravityRunner('{"type":"assistant","content":"hello from Gemini"}', captures));
+  const exact = '  leading\\n```json\\n{"looks":"structured"}\\n```\\ntrailing  \\n';
+  const server = createAntigravityAdapter(antigravityConfig, antigravityRunner(exact, captures));
   server.listen(0); await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
   try {
     const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
       model: "gemini-subscription-pro",
-      messages: [{ role: "system", content: "be terse" }, { role: "user", content: "hello" }],
+      messages: [{ role: "system", content: "be exact" }, { role: "user", content: "hello" }],
+      max_completion_tokens: 64,
     }));
     assert.equal(res.status, 200);
     const body = JSON.parse(res.body);
-    assert.equal(body.choices[0].message.content, "hello from Gemini");
+    assert.equal(body.choices[0].message.content, exact);
     assert.equal(body.choices[0].finish_reason, "stop");
+    assert.equal(body.model, "gemini-subscription-pro");
+    assert.match(body.id, /^chatcmpl-gateway-gemini-/);
     assert.deepEqual(body.usage, { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 });
     assert.equal(captures[0]!.model, "gemini-3.1-pro-high");
-    assert.match(captures[0]!.protocolPrompt, /stateless language-model backend/);
-    assert.match(captures[0]!.protocolPrompt, /"role":"user","content":"hello"/);
+    assert.match(captures[0]!.prompt, /CONVERSATION_JSON:/);
+    assert.match(captures[0]!.prompt, /"role":"user","content":"hello"/);
+    assert.doesNotMatch(captures[0]!.prompt, /\{"type":"assistant"/);
+    assert.equal(captures[0]!.jsonSchema, undefined);
   } finally { server.close(); }
 });
 
-test("Gemini subscription adapter emulates OpenAI function calling without giving Antigravity local tools", async () => {
+test("Gemini response_format json_schema is enforced through native Antigravity --json-schema", async () => {
   const captures: AntigravityCliInvocation[] = [];
-  const server = createAntigravityAdapter(antigravityConfig, antigravityRunner('{"type":"tool_calls","calls":[{"name":"read","arguments":{"path":"README.md"}}]}', captures));
+  const response = '{"answer":42}';
+  const schema = { type: "object", properties: { answer: { type: "integer" } }, required: ["answer"], additionalProperties: false };
+  const runner: AntigravityCliRunner = async (invocation) => {
+    captures.push(invocation);
+    const stdout = `${JSON.stringify({ event: "result", result: { status: "SUCCESS", response, structured_output: { answer: 42 }, usage: { input_tokens: 3, output_tokens: 4, total_tokens: 7 } } })}\n`;
+    return { exitCode: 0, signal: null, stdout, stderr: "", stdoutBytes: Buffer.byteLength(stdout), stderrBytes: 0, timedOut: false, overflow: null };
+  };
+  const server = createAntigravityAdapter(antigravityConfig, runner);
   server.listen(0); await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
   try {
     const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
       model: "gemini-subscription-pro",
-      messages: [{ role: "user", content: "inspect README" }],
-      tools: [{ type: "function", function: { name: "read", description: "read a file", parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] } } }],
+      messages: [{ role: "user", content: "json" }],
+      response_format: { type: "json_schema", json_schema: { name: "answer", strict: true, schema } },
+      max_tokens: 16,
     }));
     assert.equal(res.status, 200);
-    const body = JSON.parse(res.body);
-    assert.equal(body.choices[0].finish_reason, "tool_calls");
-    assert.equal(body.choices[0].message.tool_calls[0].function.name, "read");
-    assert.equal(body.choices[0].message.tool_calls[0].function.arguments, '{"path":"README.md"}');
-    assert.match(captures[0]!.protocolPrompt, /ALLOWED_TOOL_NAMES=\["read"\]/);
+    assert.equal(JSON.parse(res.body).choices[0].message.content, response);
+    assert.deepEqual(JSON.parse(captures[0]!.jsonSchema!), schema);
   } finally { server.close(); }
 });
 
-test("Gemini subscription adapter fails closed if a tool-enabled response breaks the transport envelope or invents a tool", async () => {
-  for (const response of ["not protocol json", '{"type":"tool_calls","calls":[{"name":"bash","arguments":{}}]}']) {
-    const server = createAntigravityAdapter(antigravityConfig, antigravityRunner(response));
+test("Gemini tools, tool history, and synthetic streaming fail closed before provider invocation", async () => {
+  const captures: AntigravityCliInvocation[] = [];
+  const runner = antigravityRunner("not reached", captures);
+  const server = createAntigravityAdapter(antigravityConfig, runner);
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const tools = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
+      model: "gemini-subscription-pro", messages: [{ role: "user", content: "use tool" }],
+      tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+    }));
+    assert.equal(tools.status, 400);
+    assert.match(tools.body, /tools are disabled/);
+
+    const history = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
+      model: "gemini-subscription-pro",
+      messages: [{ role: "assistant", content: null, tool_calls: [{ id: "x", type: "function", function: { name: "read", arguments: "{}" } }] }],
+    }));
+    assert.equal(history.status, 400);
+    assert.match(history.body, /tool history is disabled/);
+
+    const stream = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
+      model: "gemini-subscription-pro", messages: [{ role: "user", content: "hi" }], stream: true,
+    }));
+    assert.equal(stream.status, 501);
+    assert.match(stream.body, /streaming is disabled/);
+    assert.equal(captures.length, 0);
+  } finally { server.close(); }
+});
+
+test("Gemini output-token policy fails closed on over-budget or unverifiable provider usage", async () => {
+  const cases: Array<{ usage?: Record<string, number>; pattern: RegExp }> = [
+    { usage: { input_tokens: 1, output_tokens: 65, total_tokens: 66 }, pattern: /exceeded gateway token policy/ },
+    { pattern: /no token usage required by gateway output-token policy/ },
+  ];
+  for (const item of cases) {
+    const runner: AntigravityCliRunner = async () => {
+      const result: Record<string, unknown> = { status: "SUCCESS", response: "x" };
+      if (item.usage) result.usage = item.usage;
+      const stdout = `${JSON.stringify({ event: "result", result })}\n`;
+      return { exitCode: 0, signal: null, stdout, stderr: "", stdoutBytes: Buffer.byteLength(stdout), stderrBytes: 0, timedOut: false, overflow: null };
+    };
+    const server = createAntigravityAdapter(antigravityConfig, runner);
     server.listen(0); await once(server, "listening");
     const port = (server.address() as AddressInfo).port;
     try {
       const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
-        model: "gemini-subscription-pro",
-        messages: [{ role: "user", content: "use read" }],
-        tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+        model: "gemini-subscription-pro", messages: [{ role: "user", content: "hi" }], max_completion_tokens: 64,
       }));
       assert.equal(res.status, 502);
+      assert.match(res.body, item.pattern);
     } finally { server.close(); }
   }
 });
 
-test("Gemini subscription adapter buffers internally but honors OpenAI stream=true with an SSE completion", async () => {
-  const server = createAntigravityAdapter(antigravityConfig, antigravityRunner('{"type":"assistant","content":"streamed"}'));
-  server.listen(0); await once(server, "listening");
-  const port = (server.address() as AddressInfo).port;
-  try {
-    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({
-      model: "gemini-subscription-pro", messages: [{ role: "user", content: "hi" }], stream: true,
-    }));
-    assert.equal(res.status, 200);
-    assert.match(String(res.headers["content-type"]), /text\/event-stream/);
-    assert.match(res.body, /chat\.completion\.chunk/);
-    assert.match(res.body, /streamed/);
-    assert.match(res.body, /data: \[DONE\]/);
-  } finally { server.close(); }
-});
 
 test("Gemini subscription adapter reports CLI timeout/overflow instead of hiding the transport failure", async () => {
   const server = createAntigravityAdapter(antigravityConfig, antigravityRunner('', [], { timedOut: true, exitCode: null, signal: "SIGTERM" }));

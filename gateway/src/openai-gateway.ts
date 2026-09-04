@@ -3,6 +3,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest, type RequestOptions } from "node:https";
 import type { ClientRequest } from "node:http";
 import { CounterVec, GaugeVec, HistogramVec, renderPrometheus } from "./prometheus.js";
+import { checkSubscriptionResponseOutputBudget } from "./subscription-response-policy.js";
 
 /**
  * Trusted OpenAI-compatible policy/router gateway.
@@ -156,6 +157,8 @@ export interface BodyPolicyResult {
   message?: string;
   body: Buffer;
   model?: string;
+  stream?: boolean;
+  outputTokenLimit?: number;
 }
 
 export function applyBodyPolicy(pathname: string, body: Buffer, config: GatewayConfig): BodyPolicyResult {
@@ -167,19 +170,42 @@ export function applyBodyPolicy(pathname: string, body: Buffer, config: GatewayC
   catch { return { ok: false, status: 400, message: "invalid JSON body", body }; }
 
   const model = typeof parsed.model === "string" ? parsed.model : undefined;
+  const selectedBackend = model ? config.backends.find((backend) => backend.models.includes(model)) : undefined;
   if (needsModel) {
     if (!model) return { ok: false, status: 400, message: "model is required", body };
-    if (!config.backends.some((backend) => backend.models.includes(model))) {
-      return { ok: false, status: 403, message: "model not allowed", body };
+    if (!selectedBackend) return { ok: false, status: 403, message: "model not allowed", body };
+  }
+
+  const requestedLimits = [parsed.max_tokens, parsed.max_completion_tokens, parsed.max_output_tokens]
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const clientLimit = requestedLimits.length ? Math.min(...requestedLimits) : undefined;
+  const outputTokenLimit = config.maxOutputTokens > 0
+    ? (clientLimit === undefined ? config.maxOutputTokens : Math.min(config.maxOutputTokens, clientLimit))
+    : clientLimit;
+
+  if (outputTokenLimit !== undefined) {
+    if (pathname === "/v1/responses") {
+      delete parsed.max_tokens;
+      delete parsed.max_completion_tokens;
+      parsed.max_output_tokens = outputTokenLimit;
+    } else if (pathname === "/v1/chat/completions" || pathname === "/v1/completions") {
+      delete parsed.max_output_tokens;
+      if (selectedBackend?.id === "subscription") {
+        parsed.max_tokens = outputTokenLimit;
+        delete parsed.max_completion_tokens;
+      } else {
+        parsed.max_completion_tokens = outputTokenLimit;
+        delete parsed.max_tokens;
+      }
     }
   }
-  if (config.maxOutputTokens > 0) {
-    for (const key of ["max_tokens", "max_completion_tokens", "max_output_tokens"]) {
-      const current = parsed[key];
-      if (typeof current !== "number" || current > config.maxOutputTokens) parsed[key] = config.maxOutputTokens;
-    }
-  }
-  return { ok: true, body: Buffer.from(JSON.stringify(parsed), "utf8"), ...(model ? { model } : {}) };
+  return {
+    ok: true,
+    body: Buffer.from(JSON.stringify(parsed), "utf8"),
+    ...(model ? { model } : {}),
+    ...(parsed.stream === true ? { stream: true } : {}),
+    ...(outputTokenLimit !== undefined ? { outputTokenLimit } : {}),
+  };
 }
 
 export function backendForModel(config: GatewayConfig, model: string): GatewayBackend | undefined {
@@ -246,13 +272,22 @@ export class GatewayMetrics {
     this.requestBytes.inc({ backend: backend.id, model }, bytes);
   }
 
-  finishUpstream(backend: GatewayBackend, model: string, route: string, method: string, status: number, durationMs: number, bytes: number): void {
+  finishUpstream(
+    backend: GatewayBackend,
+    model: string,
+    route: string,
+    method: string,
+    status: number,
+    durationMs: number,
+    bytes: number,
+    downstreamStatus: number = status,
+  ): void {
     const labels = { backend: backend.id, model };
     this.inFlight.dec({ backend: backend.id });
     this.upstreamRequests.inc({ ...labels, status_code: String(status) });
     this.responseBytes.inc(labels, bytes);
     this.requestDuration.observe(labels, durationMs / 1000);
-    this.recordHttp(method, route, status);
+    this.recordHttp(method, route, downstreamStatus);
     const now = Date.now() / 1000;
     const success = status >= 200 && status < 400;
     this.lastResponseStatus.set(labels, status);
@@ -342,6 +377,11 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
       if (!policy.model) { metrics.recordRejected(method, pathname, 400, "model_required"); clientRes.writeHead(400).end("model is required"); return; }
       const backend = backendForModel(config, policy.model);
       if (!backend) { metrics.recordRejected(method, pathname, 403, "model_not_allowed"); clientRes.writeHead(403).end("model not allowed"); return; }
+      if (backend.id === "subscription" && policy.outputTokenLimit !== undefined && policy.stream === true) {
+        metrics.recordRejected(method, pathname, 501, "subscription_stream_output_limit");
+        clientRes.writeHead(501).end("OpenAI subscription streaming is disabled while an output-token limit is active");
+        return;
+      }
 
       const body = policy.body;
       const headers = sanitizeRequestHeaders(clientReq.headers, backend);
@@ -365,11 +405,60 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
           safeHeaders[name] = value;
         }
         const status = upstreamRes.statusCode ?? 502;
-        clientRes.writeHead(status, safeHeaders);
+        const validateSubscriptionOutput = backend.id === "subscription" && policy.outputTokenLimit !== undefined;
+        if (!validateSubscriptionOutput) {
+          clientRes.writeHead(status, safeHeaders);
+          let responseBytes = 0;
+          upstreamRes.on("data", (chunk: Buffer) => { responseBytes += chunk.length; });
+          upstreamRes.on("end", () => {
+            const durationMs = Date.now() - startedAt;
+            if (!upstreamSettled) { upstreamSettled = true; metrics.finishUpstream(backend, policy.model!, pathname, method, status, durationMs, responseBytes); }
+            logGatewayEvent({ event: "request.finish", requestId, model: policy.model, backend: backend.id, status, durationMs, responseBytes });
+          });
+          upstreamRes.pipe(clientRes);
+          return;
+        }
+
+        const responseChunks: Buffer[] = [];
         let responseBytes = 0;
-        upstreamRes.on("data", (chunk: Buffer) => { responseBytes += chunk.length; });
-        upstreamRes.on("end", () => { const durationMs = Date.now() - startedAt; if (!upstreamSettled) { upstreamSettled = true; metrics.finishUpstream(backend, policy.model!, pathname, method, status, durationMs, responseBytes); } logGatewayEvent({ event: "request.finish", requestId, model: policy.model, backend: backend.id, status, durationMs, responseBytes }); });
-        upstreamRes.pipe(clientRes);
+        let responseOverflow = false;
+        const maxValidatedResponseBytes = Math.max(config.maxBodyBytes * 8, 8 * 1024 * 1024);
+        upstreamRes.on("data", (chunk: Buffer) => {
+          responseBytes += chunk.length;
+          if (responseOverflow) return;
+          if (responseBytes > maxValidatedResponseBytes) { responseOverflow = true; return; }
+          responseChunks.push(Buffer.from(chunk));
+        });
+        upstreamRes.on("end", () => {
+          const durationMs = Date.now() - startedAt;
+          const responseBody = Buffer.concat(responseChunks);
+          const checked = responseOverflow
+            ? { ok: false, message: `subscription upstream response exceeded validation byte limit: ${responseBytes} > ${maxValidatedResponseBytes}` }
+            : checkSubscriptionResponseOutputBudget(pathname, status, responseBody, policy.outputTokenLimit);
+          const downstreamStatus = checked.ok ? status : 502;
+
+          if (checked.ok) {
+            clientRes.writeHead(status, safeHeaders).end(responseBody);
+          } else {
+            clientRes.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({
+              error: {
+                message: checked.message ?? "subscription upstream output could not be verified against the requested token limit",
+                type: "gateway_output_policy_error",
+                request_id: requestId,
+              },
+            }));
+          }
+
+          if (!upstreamSettled) {
+            upstreamSettled = true;
+            metrics.finishUpstream(backend, policy.model!, pathname, method, status, durationMs, responseBytes, downstreamStatus);
+          }
+          logGatewayEvent({
+            event: "request.finish", requestId, model: policy.model, backend: backend.id, status: downstreamStatus,
+            upstreamStatus: status, durationMs, responseBytes, outputPolicyVerified: checked.ok,
+            outputTokenLimit: policy.outputTokenLimit, providerOutputTokens: checked.outputTokens,
+          });
+        });
       });
       upstream.on("timeout", () => {
         const durationMs = Date.now() - startedAt;
