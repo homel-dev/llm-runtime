@@ -23,7 +23,7 @@ RUN apt-get update \
  && install -m 0755 /opt/agy/antigravity /usr/local/bin/agy \
  && rm -rf /tmp/agy.tar.gz /opt/agy \
  && agy --version | grep -F "${ANTIGRAVITY_CLI_VERSION}" \
- && agy --help > /tmp/agy-help.txt \
+ && { agy --help > /tmp/agy-help.txt 2>&1; rc=$?; [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ]; } \
  && grep -F -- "--input-format" /tmp/agy-help.txt >/dev/null \
  && grep -F -- "--output-format" /tmp/agy-help.txt >/dev/null \
  && grep -F -- "--json-schema" /tmp/agy-help.txt >/dev/null \
