@@ -23,99 +23,79 @@ tasks:
     desc: Deploy LLM runtime resources
     cmds:
       - kubectl apply -k k8s
+      # k8s/kustomization.yml injects part-of=llm-runtime into selectors.
+      # Re-apply the policy raw so Prometheus/DCGM selectors keep their authored shape.
       - kubectl apply -f k8s/networkpolicy.yml
 
   down:
     desc: Delete LLM runtime resources
     cmds:
+      # networkpolicy.yml is still part of k8s/kustomization.yml, so delete it once here.
       - kubectl delete -k k8s
-      - kubectl delete -f k8s/networkpolicy.yml
 
   status:
     desc: Show LLM runtime status
     cmds:
       - kubectl -n llm-runtime get pods,svc,pvc,configmap
 
-  llm:logs-small:
-    desc: Follow llm-small logs
+  llm:logs:
+    desc: Follow logs for a local runtime tier (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - kubectl -n llm-runtime logs deploy/llm-small -f
+      - kubectl -n llm-runtime logs deploy/llm-{{.TIER}} -f
 
-  llm:logs-large:
-    desc: Follow llm-large logs
+  llm:restart:
+    desc: Restart a local runtime tier (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - kubectl -n llm-runtime logs deploy/llm-large -f
+      - kubectl -n llm-runtime rollout restart deploy/llm-{{.TIER}}
 
-  llm:restart-small:
-    desc: Restart llm-small
+  llm:list:
+    desc: List a local runtime tier as advertised by the gateway (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - kubectl -n llm-runtime rollout restart deploy/llm-small
+      - ./scripts/kube-list-models.sh {{.TIER}}
 
-  llm:restart-large:
-    desc: Restart llm-large
+  llm:health:
+    desc: End-to-end health check for a local runtime tier through the gateway (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - kubectl -n llm-runtime rollout restart deploy/llm-large
+      - ./scripts/kube-runtime-health.sh {{.TIER}}
 
-  llm:list-small:
-    desc: List llm-small as advertised by the gateway
+  llm:metrics:
+    desc: Check upstream metrics from the trusted gateway Pod (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - ./scripts/kube-list-models.sh small
+      - ./scripts/kube-runtime-metrics.sh {{.TIER}}
 
-  llm:list-large:
-    desc: List llm-large as advertised by the gateway
+  llm:benchmark:
+    desc: Run the sequential gateway benchmark for a local runtime tier (TIER=small|large)
+    requires:
+      vars:
+        - name: TIER
+          enum: [small, large]
     cmds:
-      - ./scripts/kube-list-models.sh large
-
-  llm:health-small:
-    desc: End-to-end health check llm-small through the gateway
-    cmds:
-      - ./scripts/kube-runtime-health.sh small
-
-  llm:health-large:
-    desc: End-to-end health check llm-large through the gateway
-    cmds:
-      - ./scripts/kube-runtime-health.sh large
-
-  llm:metrics-small:
-    desc: Check small upstream metrics from the trusted gateway Pod
-    cmds:
-      - ./scripts/kube-runtime-metrics.sh small
-
-  llm:metrics-large:
-    desc: Check large upstream metrics from the trusted gateway Pod
-    cmds:
-      - ./scripts/kube-runtime-metrics.sh large
-
-  llm:smoke-small:
-    desc: Smoke test llm-small through the gateway
-    cmds:
-      - ./scripts/kube-smoke-chat.sh small
-
-  llm:smoke-large:
-    desc: Smoke test llm-large through the gateway
-    cmds:
-      - ./scripts/kube-smoke-chat.sh large
-
-  llm:benchmark-small:
-    desc: Benchmark llm-small through the gateway
-    cmds:
-      - ./hack/kube-benchmark.sh small
-
-  llm:benchmark-large:
-    desc: Benchmark llm-large through the gateway
-    cmds:
-      - ./hack/kube-benchmark.sh large
-
-  llm:diagnose-startup-small:
-    desc: Diagnose llm-small startup state
-    cmds:
-      - ./scripts/vllm-startup-diagnose.sh small
+      - ./hack/kube-benchmark.sh {{.TIER}}
 
   llm:diagnose-startup-large:
-    desc: Diagnose llm-large startup state
+    desc: Diagnose llm-large vLLM startup state
     cmds:
       - ./scripts/vllm-startup-diagnose.sh large
-
 
   gateway:verify:
     desc: Typecheck, build, and unit-test the llm-runtime gateway
@@ -124,24 +104,26 @@ tasks:
       - npm ci --ignore-scripts
       - npm run verify
 
-  gateway:image:build:docker:
-    desc: Build the llm-runtime gateway image in the current Docker daemon
-    cmds:
-      - docker build -t {{.GATEWAY_IMAGE}} gateway
-
   gateway:image:build:
-    desc: Build the llm-runtime gateway image directly into the minikube Docker daemon
+    desc: Build the gateway image (TARGET=minikube|docker, default minikube)
+    vars:
+      TARGET: '{{.TARGET | default "minikube"}}'
+    requires:
+      vars:
+        - name: TARGET
+          enum: [minikube, docker]
     cmds:
       - |
-        eval "$(minikube -p {{.MINIKUBE_PROFILE}} docker-env)"
+        if [ "{{.TARGET}}" = "minikube" ]; then
+          eval "$(minikube -p {{.MINIKUBE_PROFILE}} docker-env)"
+        fi
         docker build -t {{.GATEWAY_IMAGE}} gateway
 
   gateway:deploy:
     desc: Deploy the OpenAI-compatible gateway and all registered llm-runtime backends
     cmds:
-      # The old runtime policy selected every Pod in the namespace. Narrow it
-      # before applying the gateway policy or NetworkPolicy union semantics would
-      # keep port 8000 broadly reachable.
+      # Keep the base runtime policy in its known-good raw form before the gateway
+      # NetworkPolicy is applied.
       - kubectl apply -f k8s/networkpolicy.yml
       - >-
         kubectl kustomize k8s/gateway | sed 's#image: llm-runtime-gateway:dev#image: {{.GATEWAY_IMAGE}}#g' | kubectl apply -f -
@@ -178,37 +160,29 @@ tasks:
     cmds:
       - task: observability:deploy
       - task: oco-consumer:deploy
-      - task: observability:gateway-target
+      - task: observability:targets
+        vars: { JOB: gateway }
 
   gateway:openai:login:
     desc: Populate the ChatGPT/Codex subscription auth PVC from an interactive helper Pod
     cmds:
       - LLM_GATEWAY_IMAGE='{{.GATEWAY_IMAGE}}' ./scripts/gateway-openai-subscription-login.sh
 
-  gateway:openai:check:
-    desc: End-to-end ChatGPT/Codex subscription check through the OpenAI-compatible gateway
-    cmds:
-      - ./scripts/gateway-check-models.sh openai
-
   gateway:gemini:login:
     desc: Populate the Google AI subscription auth PVC using Antigravity CLI and verify cached headless auth
     cmds:
       - LLM_GATEWAY_IMAGE='{{.GATEWAY_IMAGE}}' ./scripts/gateway-gemini-subscription-login.sh
 
-  gateway:gemini:check:
-    desc: End-to-end Google AI subscription check through the OpenAI-compatible gateway
-    cmds:
-      - ./scripts/gateway-check-models.sh gemini
-
-  gateway:local:check:
-    desc: End-to-end check every advertised local inference model through the gateway
-    cmds:
-      - ./scripts/gateway-check-models.sh local
-
   gateway:check:
-    desc: End-to-end check every model advertised by all registered gateway backends
+    desc: End-to-end check advertised gateway models (PROVIDER=all|openai|gemini|local|api, default all)
+    vars:
+      PROVIDER: '{{.PROVIDER | default "all"}}'
+    requires:
+      vars:
+        - name: PROVIDER
+          enum: [all, openai, gemini, local, api]
     cmds:
-      - ./scripts/gateway-check-models.sh all
+      - ./scripts/gateway-check-models.sh {{.PROVIDER}}
 
   observability:deploy:
     desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"
@@ -223,45 +197,22 @@ tasks:
       - kubectl delete -k k8s/observability
 
   observability:status:
-    desc: Show runtime metrics status
+    desc: Show Prometheus and DCGM exporter status
     cmds:
-      - kubectl -n llm-runtime get pods,svc,configmap
+      - kubectl -n llm-runtime get deployment/prometheus daemonset/dcgm-exporter service/prometheus service/dcgm-exporter configmap/prometheus-config
 
-  observability:events:
-    desc: Show observability namespace events
+  observability:logs:
+    desc: Follow observability logs (COMPONENT=prometheus|dcgm)
+    requires:
+      vars:
+        - name: COMPONENT
+          enum: [prometheus, dcgm]
     cmds:
-      - kubectl -n llm-runtime get events --sort-by=.lastTimestamp
-
-  observability:logs-prometheus:
-    desc: Follow Prometheus logs
-    cmds:
-      - kubectl -n llm-runtime logs deploy/prometheus -f
-
-  observability:logs-dcgm:
-    desc: Follow DCGM exporter logs
-    cmds:
-      - kubectl -n llm-runtime logs ds/dcgm-exporter -f
-
-  observability:expose-start:
-    desc: Expose Prometheus on host/LAN port
-    cmds:
-      - ./scripts/observability-lan-proxy.sh start
-
-  observability:expose-stop:
-    desc: Stop host/LAN observability proxy
-    cmds:
-      - ./scripts/observability-lan-proxy.sh stop
-
-  observability:expose-status:
-    desc: Show host/LAN observability proxy status
-    cmds:
-      - ./scripts/observability-lan-proxy.sh status
-
-  observability:urls:
-    desc: Print host/LAN URL for Prometheus
-    cmds:
-      - ./scripts/observability-lan-proxy.sh urls
-
+      - |
+        case "{{.COMPONENT}}" in
+          prometheus) kubectl -n llm-runtime logs deploy/prometheus -f ;;
+          dcgm)       kubectl -n llm-runtime logs ds/dcgm-exporter -f ;;
+        esac
 
   oco-consumer:deploy:
     desc: Publish llm-runtime dashboard, datasource, and RBAC for OCO Grafana sidecars
@@ -280,26 +231,44 @@ tasks:
       - kubectl -n llm-runtime get role,rolebinding observability-console-reader
 
   observability:targets:
-    desc: Print Prometheus scrape targets API output through cluster DNS
+    desc: Show Prometheus scrape targets (JOB=all|vllm|gateway, default all)
+    vars:
+      JOB: '{{.JOB | default "all"}}'
+    requires:
+      vars:
+        - name: JOB
+          enum: [all, vllm, gateway]
     cmds:
-      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq .
+      - |
+        case "{{.JOB}}" in
+          all)
+            ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq .
+            ;;
+          vllm)
+            ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets \
+              | jq '.data.activeTargets[] | select(.labels.job | test("^vllm-")) | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+            ;;
+          gateway)
+            ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets \
+              | jq '.data.activeTargets[] | select(.labels.job == "llm-gateway") | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+            ;;
+        esac
 
-  observability:vllm-targets:
-    desc: Show Prometheus target state for vLLM scrape jobs through cluster DNS
+  observability:up:
+    desc: Query Prometheus up metrics (JOB=all|vllm|gateway, default all)
+    vars:
+      JOB: '{{.JOB | default "all"}}'
+    requires:
+      vars:
+        - name: JOB
+          enum: [all, vllm, gateway]
     cmds:
-      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job | test("^vllm-")) | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
-
-  observability:vllm-up:
-    desc: Query Prometheus up metric for vLLM scrape jobs through cluster DNS
-    cmds:
-      - ./scripts/kcurl.sh llm-runtime 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D~%22vllm-.*%22%7D' | jq .
-
-  observability:gateway-target:
-    desc: Show Prometheus target state for the llm gateway
-    cmds:
-      - ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job == "llm-gateway") | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
-
-  observability:gateway-up:
-    desc: Query Prometheus up metric for the llm gateway
-    cmds:
-      - ./scripts/kcurl.sh llm-runtime 'http://prometheus:9090/api/v1/query?query=up%7Bjob%3D%22llm-gateway%22%7D' | jq .
+      - |
+        case "{{.JOB}}" in
+          all)     query='up' ;;
+          vllm)    query='up{job=~"vllm-.*"}' ;;
+          gateway) query='up{job="llm-gateway"}' ;;
+        esac
+        ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/query \
+          --get \
+          --data-urlencode "query=${query}" | jq .
