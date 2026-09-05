@@ -39,8 +39,6 @@ tasks:
     cmds:
       - kubectl -n llm-runtime logs deploy/llm-small -f
 
-  llm:logs-medium:
-    desc: Follow llm-medium logs
     cmds:
       - kubectl -n llm-runtime logs deploy/llm-medium -f
 
@@ -54,8 +52,6 @@ tasks:
     cmds:
       - kubectl -n llm-runtime rollout restart deploy/llm-small
 
-  llm:restart-medium:
-    desc: Restart llm-medium
     cmds:
       - kubectl -n llm-runtime rollout restart deploy/llm-medium
 
@@ -65,77 +61,67 @@ tasks:
       - kubectl -n llm-runtime rollout restart deploy/llm-large
 
   llm:list-small:
-    desc: List models from small tier through cluster DNS
+    desc: List llm-small as advertised by the gateway
     cmds:
       - ./scripts/kube-list-models.sh small
 
-  llm:list-medium:
-    desc: List models from medium tier through cluster DNS
     cmds:
       - ./scripts/kube-list-models.sh medium
 
   llm:list-large:
-    desc: List models from large tier through cluster DNS
+    desc: List llm-large as advertised by the gateway
     cmds:
       - ./scripts/kube-list-models.sh large
 
   llm:health-small:
-    desc: Health check small tier through cluster DNS
+    desc: End-to-end health check llm-small through the gateway
     cmds:
       - ./scripts/kube-runtime-health.sh small
 
-  llm:health-medium:
-    desc: Health check medium tier through cluster DNS
     cmds:
       - ./scripts/kube-runtime-health.sh medium
 
   llm:health-large:
-    desc: Health check large tier through cluster DNS
+    desc: End-to-end health check llm-large through the gateway
     cmds:
       - ./scripts/kube-runtime-health.sh large
 
   llm:metrics-small:
-    desc: Check vLLM /metrics endpoint on small tier through cluster DNS
+    desc: Check small upstream metrics from the trusted gateway Pod
     cmds:
       - ./scripts/kube-runtime-metrics.sh small
 
-  llm:metrics-medium:
-    desc: Check vLLM /metrics endpoint on medium tier through cluster DNS
     cmds:
       - ./scripts/kube-runtime-metrics.sh medium
 
   llm:metrics-large:
-    desc: Check vLLM /metrics endpoint on large tier through cluster DNS
+    desc: Check large upstream metrics from the trusted gateway Pod
     cmds:
       - ./scripts/kube-runtime-metrics.sh large
 
   llm:smoke-small:
-    desc: Smoke test small tier through cluster DNS
+    desc: Smoke test llm-small through the gateway
     cmds:
       - ./scripts/kube-smoke-chat.sh small
 
-  llm:smoke-medium:
-    desc: Smoke test medium tier through cluster DNS
     cmds:
       - ./scripts/kube-smoke-chat.sh medium
 
   llm:smoke-large:
-    desc: Smoke test large tier through cluster DNS
+    desc: Smoke test llm-large through the gateway
     cmds:
       - ./scripts/kube-smoke-chat.sh large
 
   llm:benchmark-small:
-    desc: Benchmark small tier through cluster DNS
+    desc: Benchmark llm-small through the gateway
     cmds:
       - ./hack/kube-benchmark.sh small
 
-  llm:benchmark-medium:
-    desc: Benchmark medium tier through cluster DNS
     cmds:
       - ./hack/kube-benchmark.sh medium
 
   llm:benchmark-large:
-    desc: Benchmark large tier through cluster DNS
+    desc: Benchmark llm-large through the gateway
     cmds:
       - ./hack/kube-benchmark.sh large
 
@@ -144,8 +130,6 @@ tasks:
     cmds:
       - ./scripts/vllm-startup-diagnose.sh small
 
-  llm:diagnose-startup-medium:
-    desc: Diagnose llm-medium startup state
     cmds:
       - ./scripts/vllm-startup-diagnose.sh medium
 
@@ -175,7 +159,7 @@ tasks:
         docker build -t {{.GATEWAY_IMAGE}} gateway
 
   gateway:deploy:
-    desc: Deploy the OpenAI-compatible gateway and subscription backends owned by llm-runtime
+    desc: Deploy the OpenAI-compatible gateway and all registered llm-runtime backends
     cmds:
       # The old runtime policy selected every Pod in the namespace. Narrow it
       # before applying the gateway policy or NetworkPolicy union semantics would

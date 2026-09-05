@@ -21,7 +21,8 @@ data:
   LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 
   LLM_SMALL_MODEL: "llm-small"
-  LLM_MEDIUM_MODEL: "llm-medium"
+  # Medium is intentionally not deployed by k8s/kustomization.yml.
+  LLM_MEDIUM_MODEL: ""
   LLM_LARGE_MODEL: "llm-large"
 
   # Runtime metadata

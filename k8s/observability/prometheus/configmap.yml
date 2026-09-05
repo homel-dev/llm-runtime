@@ -30,15 +30,6 @@ data:
               subsystem: llm-runtime
               tier: small
 
-      - job_name: vllm-medium
-        metrics_path: /metrics
-        static_configs:
-          - targets:
-              - llm-medium.llm-runtime.svc.cluster.local:8000
-            labels:
-              subsystem: llm-runtime
-              tier: medium
-
       - job_name: vllm-large
         metrics_path: /metrics
         static_configs:
