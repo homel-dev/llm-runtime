@@ -3,7 +3,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest, type RequestOptions } from "node:https";
 import type { ClientRequest } from "node:http";
 import { CounterVec, GaugeVec, HistogramVec, renderPrometheus } from "./prometheus.js";
-import { checkSubscriptionResponseOutputBudget } from "./subscription-response-policy.js";
+import { checkSubscriptionResponseOutputBudget, checkSubscriptionStreamOutputBudget } from "./subscription-response-policy.js";
 
 /**
  * Trusted OpenAI-compatible policy/router gateway.
@@ -400,14 +400,20 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
     const rawUrl = clientReq.url ?? "/";
     const pathname = pathnameOf(rawUrl);
     const route = config.allowedEndpoints.includes(pathname) ? pathname : "rejected";
-    if (method !== "POST" && method !== "GET") { metrics.recordRejected(method, route, 405, "method"); clientRes.writeHead(405).end("method not allowed"); return; }
-    if (!config.allowedEndpoints.includes(pathname)) { metrics.recordRejected(method, "rejected", 404, "endpoint"); clientRes.writeHead(404).end("endpoint not allowed"); return; }
+    // Every locally-decided rejection is both metered and logged as a structured
+    // event before the client response is written, so policy rejections leave a
+    // trace in ordinary gateway stdout instead of only in Prometheus counters.
+    const logReject = (status: number, reason: string, extra?: { model?: string; backend?: string }): void => {
+      logGatewayEvent({ event: "request.reject", requestId, method, path: pathname, ...(extra?.model ? { model: extra.model } : {}), ...(extra?.backend ? { backend: extra.backend } : {}), status, reason });
+    };
+    if (method !== "POST" && method !== "GET") { logReject(405, "method"); metrics.recordRejected(method, route, 405, "method"); clientRes.writeHead(405).end("method not allowed"); return; }
+    if (!config.allowedEndpoints.includes(pathname)) { logReject(404, "endpoint"); metrics.recordRejected(method, "rejected", 404, "endpoint"); clientRes.writeHead(404).end("endpoint not allowed"); return; }
     if (pathname === "/v1/models" && method === "GET") {
       metrics.recordHttp(method, pathname, 200);
       clientRes.writeHead(200, { "content-type": "application/json" }).end(modelsResponse(config));
       return;
     }
-    if (method !== "POST") { metrics.recordRejected(method, pathname, 405, "method"); clientRes.writeHead(405).end("method not allowed"); return; }
+    if (method !== "POST") { logReject(405, "method"); metrics.recordRejected(method, pathname, 405, "method"); clientRes.writeHead(405).end("method not allowed"); return; }
 
     const chunks: Buffer[] = [];
     let total = 0;
@@ -415,21 +421,16 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
     clientReq.on("data", (chunk: Buffer) => {
       if (aborted) return;
       total += chunk.length;
-      if (total > config.maxBodyBytes) { aborted = true; metrics.recordRejected(method, pathname, 413, "payload_too_large"); clientRes.writeHead(413).end("payload too large"); clientReq.destroy(); return; }
+      if (total > config.maxBodyBytes) { aborted = true; logReject(413, "payload_too_large"); metrics.recordRejected(method, pathname, 413, "payload_too_large"); clientRes.writeHead(413).end("payload too large"); clientReq.destroy(); return; }
       chunks.push(chunk);
     });
     clientReq.on("end", () => {
       if (aborted) return;
       const policy = applyBodyPolicy(pathname, Buffer.concat(chunks), config);
-      if (!policy.ok) { const status = policy.status ?? 400; metrics.recordRejected(method, pathname, status, "body_policy"); clientRes.writeHead(status).end(policy.message ?? "rejected"); return; }
-      if (!policy.model) { metrics.recordRejected(method, pathname, 400, "model_required"); clientRes.writeHead(400).end("model is required"); return; }
+      if (!policy.ok) { const status = policy.status ?? 400; logReject(status, "body_policy", { model: policy.model }); metrics.recordRejected(method, pathname, status, "body_policy"); clientRes.writeHead(status).end(policy.message ?? "rejected"); return; }
+      if (!policy.model) { logReject(400, "model_required"); metrics.recordRejected(method, pathname, 400, "model_required"); clientRes.writeHead(400).end("model is required"); return; }
       const backend = backendForModel(config, policy.model);
-      if (!backend) { metrics.recordRejected(method, pathname, 403, "model_not_allowed"); clientRes.writeHead(403).end("model not allowed"); return; }
-      if (backend.id === "subscription" && policy.outputTokenLimit !== undefined && policy.stream === true) {
-        metrics.recordRejected(method, pathname, 501, "subscription_stream_output_limit");
-        clientRes.writeHead(501).end("OpenAI subscription streaming is disabled while an output-token limit is active");
-        return;
-      }
+      if (!backend) { logReject(403, "model_not_allowed", { model: policy.model }); metrics.recordRejected(method, pathname, 403, "model_not_allowed"); clientRes.writeHead(403).end("model not allowed"); return; }
 
       const body = policy.body;
       const headers = sanitizeRequestHeaders(clientReq.headers, backend);
@@ -470,6 +471,7 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
         const responseChunks: Buffer[] = [];
         let responseBytes = 0;
         let responseOverflow = false;
+        let responseSettled = false;
         const maxValidatedResponseBytes = Math.max(config.maxBodyBytes * 8, 8 * 1024 * 1024);
         upstreamRes.on("data", (chunk: Buffer) => {
           responseBytes += chunk.length;
@@ -478,14 +480,24 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
           responseChunks.push(Buffer.from(chunk));
         });
         upstreamRes.on("end", () => {
+          if (responseSettled) return;
+          responseSettled = true;
           const durationMs = Date.now() - startedAt;
           const responseBody = Buffer.concat(responseChunks);
           const checked = responseOverflow
             ? { ok: false, message: `subscription upstream response exceeded validation byte limit: ${responseBytes} > ${maxValidatedResponseBytes}` }
-            : checkSubscriptionResponseOutputBudget(pathname, status, responseBody, policy.outputTokenLimit);
+            : policy.stream === true
+              ? checkSubscriptionStreamOutputBudget(pathname, status, responseBody, policy.outputTokenLimit)
+              : checkSubscriptionResponseOutputBudget(pathname, status, responseBody, policy.outputTokenLimit);
           const downstreamStatus = checked.ok ? status : 502;
 
           if (checked.ok) {
+            // We buffered the whole reply, so we now own its framing: drop the
+            // upstream's transfer-encoding and set an explicit content-length for
+            // the replayed bytes (SSE or JSON alike), so no ambiguous double
+            // framing reaches the client.
+            delete safeHeaders["transfer-encoding"];
+            safeHeaders["content-length"] = String(responseBody.length);
             clientRes.writeHead(status, safeHeaders).end(responseBody);
           } else {
             clientRes.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({
@@ -507,6 +519,33 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
             outputTokenLimit: policy.outputTokenLimit, providerOutputTokens: checked.outputTokens,
           });
         });
+        // A premature disconnect (TCP reset, aborted response) means the buffered
+        // reply is incomplete and its terminal usage cannot be trusted. Fail closed:
+        // never replay a truncated stream whose output tokens we could not verify,
+        // and record it as a transport failure so success metrics don't lie.
+        const failTruncated = (reason: string): void => {
+          if (responseSettled) return;
+          responseSettled = true;
+          const durationMs = Date.now() - startedAt;
+          if (!clientRes.headersSent) {
+            clientRes.writeHead(502, { "content-type": "application/json" }).end(JSON.stringify({
+              error: {
+                message: `subscription upstream stream ${reason} before completion; output-token limit cannot be verified`,
+                type: "gateway_output_policy_error",
+                request_id: requestId,
+              },
+            }));
+          } else {
+            clientRes.end();
+          }
+          if (!upstreamSettled) {
+            upstreamSettled = true;
+            metrics.failUpstream(backend, policy.model!, pathname, method, "transport", durationMs);
+          }
+          logGatewayEvent({ event: "request.error", requestId, model: policy.model, backend: backend.id, durationMs, error: `subscription stream ${reason}` });
+        };
+        upstreamRes.on("error", () => failTruncated("errored"));
+        upstreamRes.on("aborted", () => failTruncated("aborted"));
       });
       upstream.on("timeout", () => {
         const durationMs = Date.now() - startedAt;
@@ -523,7 +562,7 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
       if (body.length) upstream.write(body);
       upstream.end();
     });
-    clientReq.on("error", () => { if (!clientRes.headersSent) { metrics.recordRejected(method, route, 400, "client_transport"); clientRes.writeHead(400).end("bad request"); } });
+    clientReq.on("error", () => { if (!clientRes.headersSent) { logReject(400, "client_transport"); metrics.recordRejected(method, route, 400, "client_transport"); clientRes.writeHead(400).end("bad request"); } });
   });
 }
 

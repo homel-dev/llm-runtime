@@ -304,21 +304,275 @@ test("OpenAI subscription response fails closed on untrustworthy zero-fallback u
   } finally { server.close(); }
 });
 
-test("OpenAI subscription streaming fails closed before upstream when an output-token limit is active", async () => {
+const SSE_OK = [
+  'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"he"}}]}',
+  "",
+  'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"llo"}}]}',
+  "",
+  'data: {"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}',
+  "",
+  "data: [DONE]",
+  "",
+].join("\n");
+
+test("OpenAI subscription streaming is forwarded, buffered, verified, and replayed byte-exact within the output limit", async () => {
   const captured: Captured[] = [];
-  const server = createGateway(base, fakeRequester(captured));
+  const server = createGateway(base, staticResponseRequester(SSE_OK, 200, { "content-type": "text/event-stream", "transfer-encoding": "chunked" }, captured));
   server.listen(0); await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
   try {
-    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true }));
-    assert.equal(res.status, 501);
-    assert.match(res.body, /streaming is disabled while an output-token limit is active/);
-    assert.equal(captured.length, 0);
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 200);
+    assert.equal(res.headers["content-type"], "text/event-stream");
+    assert.equal(res.body, SSE_OK);
+    assert.match(res.body, /data: \[DONE\]/);
+    // The gateway owns framing on buffered replay: no dangling chunked header.
+    assert.equal(res.headers["transfer-encoding"], undefined);
+    // The forwarded request keeps stream=true and clamps the limit. The gateway
+    // no longer injects stream_options: openai-oauth@2.0.0 emits terminal usage
+    // unconditionally, so the field would be a no-op.
+    const forwarded = JSON.parse(captured[0]!.body);
+    assert.equal(forwarded.stream, true);
+    assert.equal(forwarded.max_tokens, 8);
+    assert.equal("stream_options" in forwarded, false);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming does not inject stream_options (openai-oauth emits terminal usage unconditionally)", () => {
+  const policy = applyBodyPolicy("/v1/chat/completions", Buffer.from(JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 })), base);
+  const forwarded = JSON.parse(policy.body.toString("utf8"));
+  assert.equal("stream_options" in forwarded, false);
+});
+
+test("OpenAI subscription streaming fails closed when the terminal usage exceeds the output limit", async () => {
+  const over = SSE_OK.replace('"completion_tokens":7', '"completion_tokens":9').replace('"total_tokens":12', '"total_tokens":14');
+  const server = createGateway(base, staticResponseRequester(over, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /gateway_output_policy_error/);
+    assert.match(res.body, /9 > 8/);
+    assert.doesNotMatch(res.body, /\[DONE\]/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming fails closed when no terminal usage event is present", async () => {
+  const noUsage = [
+    'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"hi"}}]}',
+    "",
+    "data: [DONE]",
+    "",
+  ].join("\n");
+  const server = createGateway(base, staticResponseRequester(noUsage, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /is not the choices:\[\] usage chunk/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming fails closed when the terminal usage chunk has untrustworthy usage", async () => {
+  const zeroUsage = [
+    'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"hi"}}]}',
+    "",
+    'data: {"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}',
+    "",
+    "data: [DONE]",
+    "",
+  ].join("\n");
+  const server = createGateway(base, staticResponseRequester(zeroUsage, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /no trustworthy terminal token usage/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming fails closed when the stream never terminates with [DONE]", async () => {
+  const noDone = 'data: {"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}\n\n';
+  const server = createGateway(base, staticResponseRequester(noDone, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /without a terminal \[DONE\]/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription streaming rejects an early usage value that is not the terminal event before [DONE]", async () => {
+  // usage appears early, then more content, then [DONE] with no real terminal usage.
+  const sneaky = [
+    'data: {"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":5,"total_tokens":10}}',
+    "",
+    'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"more and more"}}]}',
+    "",
+    "data: [DONE]",
+    "",
+  ].join("\n");
+  const server = createGateway(base, staticResponseRequester(sneaky, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /is not the choices:\[\] usage chunk/);
+  } finally { server.close(); }
+});
+
+// Real openai-oauth@2.0.0 Responses usage shape: input/output tokens with
+// *_details, and crucially NO total_tokens (raw Codex passthrough).
+const RESPONSES_SSE_OK = [
+  'event: response.output_text.delta',
+  'data: {"type":"response.output_text.delta","delta":"hi"}',
+  "",
+  'event: response.completed',
+  'data: {"type":"response.completed","response":{"usage":{"input_tokens":5,"input_tokens_details":{"cached_tokens":1},"output_tokens":7,"output_tokens_details":{"reasoning_tokens":0}}}}',
+  "",
+].join("\n");
+
+test("OpenAI subscription Responses API streaming verifies response.completed usage without total_tokens and replays bytes", async () => {
+  const server = createGateway(base, staticResponseRequester(RESPONSES_SSE_OK, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_output_tokens: 8, input: "x" }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, RESPONSES_SSE_OK);
+    assert.equal(res.headers["content-type"], "text/event-stream");
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription Responses API streaming fails closed when output_tokens exceeds the limit", async () => {
+  const over = RESPONSES_SSE_OK.replace('"output_tokens":7', '"output_tokens":9');
+  const server = createGateway(base, staticResponseRequester(over, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_output_tokens: 8, input: "x" }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /9 > 8/);
+  } finally { server.close(); }
+});
+
+test("OpenAI subscription Responses API streaming fails closed when the terminal event is not the last semantic event", async () => {
+  const trailing = [
+    'event: response.output_text.delta',
+    'data: {"type":"response.output_text.delta","delta":"hi"}',
+    "",
+    'event: response.completed',
+    'data: {"type":"response.completed","response":{"usage":{"input_tokens":5,"input_tokens_details":{"cached_tokens":1},"output_tokens":7,"output_tokens_details":{"reasoning_tokens":0}}}}',
+    "",
+    'event: response.output_text.delta',
+    'data: {"type":"response.output_text.delta","delta":"leak"}',
+    "",
+  ].join("\n");
+  const server = createGateway(base, staticResponseRequester(trailing, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_output_tokens: 8, input: "x" }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /did not end with a terminal response\.completed/);
+  } finally { server.close(); }
+});
+
+// Real transport variant: openai-oauth@2.0.0 forwards Codex verbatim, and the
+// terminal can be marked by the SSE `event:` field and `response.status` with NO
+// JSON `type`. The gateway must accept this and verify output_tokens.
+const RESPONSES_SSE_NO_TYPE = [
+  'event: response.created',
+  'data: {"response":{"id":"resp_1","status":"in_progress"}}',
+  "",
+  'event: response.completed',
+  'data: {"response":{"id":"resp_1","status":"completed","usage":{"input_tokens":5,"input_tokens_details":{"cached_tokens":1},"output_tokens":7,"output_tokens_details":{"reasoning_tokens":0}}}}',
+  "",
+].join("\n");
+
+test("OpenAI subscription Responses API streaming accepts a terminal marked only by event: and response.status (no JSON type)", async () => {
+  const server = createGateway(base, staticResponseRequester(RESPONSES_SSE_NO_TYPE, 200, { "content-type": "text/event-stream" }));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_output_tokens: 8, input: "x" }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, RESPONSES_SSE_NO_TYPE);
+  } finally { server.close(); }
+});
+
+function abortingStreamRequester(chunk: string, event: "error" | "aborted"): UpstreamRequester {
+  return (_backend, _options, onResponse) => {
+    const req = new EventEmitter() as any;
+    req.write = () => true;
+    req.end = () => {
+      const res = new EventEmitter() as any;
+      res.statusCode = 200;
+      res.headers = { "content-type": "text/event-stream" };
+      res.pipe = () => {};
+      onResponse(res as unknown as IncomingMessage);
+      setImmediate(() => {
+        if (chunk) res.emit("data", Buffer.from(chunk));
+        res.emit(event, new Error("connection reset"));
+      });
+    };
+    req.destroy = () => {};
+    return req as any;
+  };
+}
+
+for (const event of ["error", "aborted"] as const) {
+  test(`OpenAI subscription streaming fails closed when the upstream stream ${event}s mid-flight`, async () => {
+    const partial = 'data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"hi"}}]}\n\n';
+    const server = createGateway(base, abortingStreamRequester(partial, event));
+    server.listen(0); await once(server, "listening");
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+      assert.equal(res.status, 502);
+      assert.match(res.body, /gateway_output_policy_error/);
+      assert.match(res.body, /before completion/);
+      assert.doesNotMatch(res.body, /choices/);
+    } finally { server.close(); }
+  });
+}
+
+test("OpenAI subscription streaming settles once when the upstream emits both error and aborted", async () => {
+  const doubleFail: UpstreamRequester = (_backend, _options, onResponse) => {
+    const req = new EventEmitter() as any;
+    req.write = () => true;
+    req.end = () => {
+      const res = new EventEmitter() as any;
+      res.statusCode = 200;
+      res.headers = { "content-type": "text/event-stream" };
+      res.pipe = () => {};
+      onResponse(res as unknown as IncomingMessage);
+      setImmediate(() => {
+        res.emit("data", Buffer.from('data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'));
+        res.emit("error", new Error("reset"));
+        res.emit("aborted");
+      });
+    };
+    req.destroy = () => {};
+    return req as any;
+  };
+  const server = createGateway(base, doubleFail);
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/chat/completions", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_completion_tokens: 8 }));
+    assert.equal(res.status, 502);
+    assert.match(res.body, /before completion/);
   } finally { server.close(); }
 });
 
 test("OpenAI subscription Responses API validates output_tokens and preserves verified bytes", async () => {
-  const opaque = ' { "id":"resp_provider", "output": [], "usage": { "input_tokens": 5, "output_tokens": 9, "total_tokens": 14 } }\n';
+  const opaque = ' { "id":"resp_provider", "output": [], "usage": { "input_tokens": 5, "input_tokens_details": { "cached_tokens": 0 }, "output_tokens": 9, "output_tokens_details": { "reasoning_tokens": 0 } } }\n';
   const server = createGateway(base, staticResponseRequester(opaque));
   server.listen(0); await once(server, "listening");
   const port = (server.address() as AddressInfo).port;
