@@ -39,9 +39,6 @@ tasks:
     cmds:
       - kubectl -n llm-runtime logs deploy/llm-small -f
 
-    cmds:
-      - kubectl -n llm-runtime logs deploy/llm-medium -f
-
   llm:logs-large:
     desc: Follow llm-large logs
     cmds:
@@ -51,9 +48,6 @@ tasks:
     desc: Restart llm-small
     cmds:
       - kubectl -n llm-runtime rollout restart deploy/llm-small
-
-    cmds:
-      - kubectl -n llm-runtime rollout restart deploy/llm-medium
 
   llm:restart-large:
     desc: Restart llm-large
@@ -65,9 +59,6 @@ tasks:
     cmds:
       - ./scripts/kube-list-models.sh small
 
-    cmds:
-      - ./scripts/kube-list-models.sh medium
-
   llm:list-large:
     desc: List llm-large as advertised by the gateway
     cmds:
@@ -77,9 +68,6 @@ tasks:
     desc: End-to-end health check llm-small through the gateway
     cmds:
       - ./scripts/kube-runtime-health.sh small
-
-    cmds:
-      - ./scripts/kube-runtime-health.sh medium
 
   llm:health-large:
     desc: End-to-end health check llm-large through the gateway
@@ -91,9 +79,6 @@ tasks:
     cmds:
       - ./scripts/kube-runtime-metrics.sh small
 
-    cmds:
-      - ./scripts/kube-runtime-metrics.sh medium
-
   llm:metrics-large:
     desc: Check large upstream metrics from the trusted gateway Pod
     cmds:
@@ -103,9 +88,6 @@ tasks:
     desc: Smoke test llm-small through the gateway
     cmds:
       - ./scripts/kube-smoke-chat.sh small
-
-    cmds:
-      - ./scripts/kube-smoke-chat.sh medium
 
   llm:smoke-large:
     desc: Smoke test llm-large through the gateway
@@ -117,9 +99,6 @@ tasks:
     cmds:
       - ./hack/kube-benchmark.sh small
 
-    cmds:
-      - ./hack/kube-benchmark.sh medium
-
   llm:benchmark-large:
     desc: Benchmark llm-large through the gateway
     cmds:
@@ -129,9 +108,6 @@ tasks:
     desc: Diagnose llm-small startup state
     cmds:
       - ./scripts/vllm-startup-diagnose.sh small
-
-    cmds:
-      - ./scripts/vllm-startup-diagnose.sh medium
 
   llm:diagnose-startup-large:
     desc: Diagnose llm-large startup state
