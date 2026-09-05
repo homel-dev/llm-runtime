@@ -23,11 +23,13 @@ tasks:
     desc: Deploy LLM runtime resources
     cmds:
       - kubectl apply -k k8s
+      - kubectl apply -f k8s/networkpolicy.yml
 
   down:
     desc: Delete LLM runtime resources
     cmds:
       - kubectl delete -k k8s
+      - kubectl delete -f k8s/networkpolicy.yml
 
   status:
     desc: Show LLM runtime status
