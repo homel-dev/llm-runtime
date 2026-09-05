@@ -8,7 +8,7 @@ resources:
   - namespace.yml
   - hf-secret.yml
   - runtime-contract.yml
-  - networkpolicy.yml
+ # - networkpolicy.yml
 
   - small/pvc.yml
   - small/deployment.yml
