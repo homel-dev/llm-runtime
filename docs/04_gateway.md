@@ -74,8 +74,8 @@ backends in the same Pod.
 | Gateway model | Backend | Transport |
 | --- | --- | --- |
 | `gpt-5.6-sol` | ChatGPT/Codex subscription | `openai-oauth` on `127.0.0.1:10531` |
-| `gemini-subscription-pro` | Google AI subscription | Antigravity CLI model `gemini-3.1-pro-high` on `127.0.0.1:10532` |
-| `gemini-subscription-auto` | Google AI subscription | compatibility alias pinned to `gemini-3.7-flash-medium` on `127.0.0.1:10532` |
+| `gemini-subscription-pro` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-pro-agent` on `127.0.0.1:10532` |
+| `gemini-subscription-auto` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-3.7-flash-medium` on `127.0.0.1:10532` |
 
 `gemini-subscription-auto` is retained for RR compatibility. It does not mean
 dynamic model selection.
@@ -89,25 +89,27 @@ unadvertised models fail rather than being forwarded to an arbitrary provider.
 
 ## Gemini Subscription Transport
 
-Individual Google AI subscription access uses Antigravity CLI (`agy`). The
-adapter uses these headless interfaces:
+Individual Google AI subscription access uses a direct Cloud Code Assist
+transport (`antigravity-direct`). The adapter speaks the same wire API the
+Antigravity client calls, without running the Antigravity agent loop:
 
-- `--input-format stream-json` with NDJSON prompt input;
-- `--output-format stream-json`;
-- an explicit `--model` slug;
-- caller `response_format` JSON Schema mapped directly to Antigravity `--json-schema` when structured output is requested;
-- cached account authentication created by an interactive login.
+- OpenAI Chat Completions in, native `streamGenerateContent` (`alt=sse`) out;
+- an explicit wire model via `ANTIGRAVITY_ADAPTER_MODEL_MAP`; the Pro alias
+  resolves to the live `gemini-pro-agent` deployment;
+- caller `response_format` JSON Schema mapped to native `responseJsonSchema`;
+- OAuth credentials loaded from the login-cached token file or the keyring, with
+  single-flight refresh against the Google token endpoint.
 
-The adapter does not ask the model to manufacture a gateway transport envelope.
-For plain text completions, the provider `result.response` string becomes the
-OpenAI-compatible assistant content without trimming, fence removal, JSON
-parsing, or other interpretation. Function/tool calling and token-streaming are
-rejected until deterministic native mappings exist rather than being emulated by
-a model prompt or synthetic SSE.
+The adapter does not ask the model to manufacture a gateway transport envelope
+and does not route through the Antigravity agent harness. Native Gemini
+`functionCall`/`functionResponse` map to OpenAI `tool_calls`/tool history, and
+native SSE is translated to OpenAI streaming chunks.
 
-The adapter removes Gemini API-key and Vertex credential environment variables
-before spawning `agy`. This prevents an inherited parent environment from
-changing the intended subscription authentication path.
+`agy` (Antigravity CLI) is retained solely for interactive account login
+(`task gateway:gemini:login`), which caches the subscription credential the
+direct adapter then reads. The login path removes Gemini API-key and Vertex
+credential environment variables so the cached credential stays on the intended
+subscription authentication path.
 
 The Antigravity settings file denies file, command, URL, unsandboxed, and MCP
 actions. The provider container has no project workspace mount. Kubernetes runs
@@ -296,15 +298,19 @@ undetected until traffic or an explicit provider check exercises them.
 
 ## API Limitations
 
-Gemini subscription routing supports non-streaming OpenAI Chat Completions
-for text output. `response_format: {type: "json_object"}` and
-`response_format: {type: "json_schema", ...}` are enforced with Antigravity's
-native `--json-schema` facility. `/v1/responses` returns HTTP 501 for Gemini
-subscription models.
+Gemini subscription routing supports OpenAI Chat Completions text output,
+native function/tool calling, tool-call history, and `stream: true`, mapped
+deterministically to the Cloud Code Assist wire API. `response_format: {type: "json_object"}`
+and `response_format: {type: "json_schema", ...}` map to native
+`responseJsonSchema`. `/v1/responses` returns HTTP 501 for Gemini subscription
+models.
 
-Gemini function/tool calling, tool-call history, and `stream: true` fail closed
-until deterministic native mappings exist. The gateway does not synthesize tool
-calls or buffered SSE and does not ask the model to emit a transport envelope.
+The router does not run its output-token verification for the
+`gemini-subscription` backend (only for `subscription`), so the Gemini adapter
+self-enforces the effective limit: with a limit active it buffers, verifies
+terminal usage (reasoning tokens included), and fails closed before releasing
+any bytes, because emitted SSE cannot be revoked. With no limit it streams
+through unbuffered.
 
 Output-token limits are capability-aware. The effective limit is the smaller of
 the client-requested limit and `GATEWAY_MAX_OUTPUT_TOKENS` when the gateway cap

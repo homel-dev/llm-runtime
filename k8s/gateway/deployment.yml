@@ -83,6 +83,7 @@ spec:
             - { name: GATEWAY_LOCAL_LARGE_HOST, value: "llm-large.llm-runtime.svc.cluster.local" }
             - { name: GATEWAY_LOCAL_LARGE_PORT, value: "8000" }
             - { name: GATEWAY_MAX_OUTPUT_TOKENS, value: "0" }
+            - { name: GATEWAY_UPSTREAM_TIMEOUT_MS, value: "900000" }
           readinessProbe:
             httpGet:
               path: /v1/models
@@ -151,8 +152,18 @@ spec:
             - { name: HOME, value: /antigravity-auth }
             - { name: ANTIGRAVITY_ADAPTER_LISTEN_PORT, value: "10532" }
             - { name: ANTIGRAVITY_ADAPTER_MODELS, value: "gemini-subscription-pro,gemini-subscription-auto" }
-            - { name: ANTIGRAVITY_ADAPTER_MODEL_MAP, value: "gemini-subscription-pro=gemini-3.1-pro-high,gemini-subscription-auto=gemini-3.7-flash-medium" }
-            - { name: ANTIGRAVITY_ADAPTER_TIMEOUT_MS, value: "180000" }
+            - { name: ANTIGRAVITY_ADAPTER_MODEL_MAP, value: "gemini-subscription-pro=gemini-pro-agent,gemini-subscription-auto=gemini-3.7-flash-medium" }
+            - name: ANTIGRAVITY_ADAPTER_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: rr-antigravity-oauth-client
+                  key: client-id
+            - name: ANTIGRAVITY_ADAPTER_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rr-antigravity-oauth-client
+                  key: client-secret
+            - { name: ANTIGRAVITY_ADAPTER_TIMEOUT_MS, value: "900000" }
             - { name: ANTIGRAVITY_ADAPTER_MAX_STDOUT_BYTES, value: "8388608" }
             - { name: ANTIGRAVITY_ADAPTER_MAX_STDERR_BYTES, value: "2097152" }
             - { name: ANTIGRAVITY_ADAPTER_WORKDIR, value: /tmp/antigravity-work }

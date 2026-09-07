@@ -95,8 +95,8 @@ for (const entry of models) {
   // Streaming probe. All backends must produce a real functional stream (valid
   // SSE, actual assistant content, terminal [DONE]). Subscription additionally
   // must carry the terminal choices:[] usage chunk immediately before [DONE] —
-  // the enforcement invariant. gemini-subscription streaming is unsupported; skip.
-  if (backend === "gemini-subscription") continue;
+  // the enforcement invariant. Gemini direct transport is checked like every
+  // other functional SSE backend.
   const requireUsage = backend === "subscription";
   try {
     const streamBody = {
