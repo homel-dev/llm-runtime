@@ -409,7 +409,6 @@ test("tool result text is preserved verbatim under output; $ref params are deref
     assert.ok(params.properties.item.properties.name);
   } finally { server.close(); }
 });
-<<<<<<< HEAD
 
 test("P0: tool parameters are emitted as Gemini protobuf Schema (UPPERCASE types)", async () => {
   const captured: Array<{ url: string; init?: RequestInit }> = [];
@@ -532,5 +531,5 @@ test("P1: default User-Agent is the captured agy CLI identity", () => {
   assert.ok(loaded.userAgent.includes("cl=974782877"));
   assert.ok(loaded.userAgent.includes("auth_method=consumer"));
 });
-=======
->>>>>>> 17ed15cc1ab596f962a0cb123099a495023780e5
+
+
