@@ -228,17 +228,33 @@ test("stream with an active output limit buffers and fails closed before leaking
   } finally { server.close(); }
 });
 
-test("reasoning tokens count toward the enforced Gemini output budget", async () => {
+test("reasoning tokens do NOT consume the caller's visible output budget", async () => {
   const captured: Array<{ url: string; init?: RequestInit }> = [];
+  // candidates(60) <= limit(64); thoughts(5) is reasoning and must not count.
   const fetcher = baseFetch(captured, () => sse({ response: { candidates: [{ content: { role: "model", parts: [{ text: "reasoned answer" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 60, thoughtsTokenCount: 5, totalTokenCount: 75 } } }));
   const server = createAntigravityDirectAdapter(config, { fetcher, credentialLoader: validCredential });
   server.listen(0); await once(server, "listening");
   try {
     const port = (server.address() as AddressInfo).port;
     const res = await callServer(port, "/v1/chat/completions", { model: "gemini-subscription-pro", messages: [{ role: "user", content: "think" }], stream: true, max_completion_tokens: 64 });
+    assert.equal(res.status, 200);
+    assert.match(res.body, /reasoned answer/);
+    assert.match(res.body, /"reasoning_tokens":5/);
+  } finally { server.close(); }
+});
+
+test("visible output over the caller limit still fails closed (reasoning excluded)", async () => {
+  const captured: Array<{ url: string; init?: RequestInit }> = [];
+  // candidates(100) > limit(64): genuine over-budget visible output -> fail closed.
+  const fetcher = baseFetch(captured, () => sse({ response: { candidates: [{ content: { role: "model", parts: [{ text: "way too long" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 100, thoughtsTokenCount: 5, totalTokenCount: 115 } } }));
+  const server = createAntigravityDirectAdapter(config, { fetcher, credentialLoader: validCredential });
+  server.listen(0); await once(server, "listening");
+  try {
+    const port = (server.address() as AddressInfo).port;
+    const res = await callServer(port, "/v1/chat/completions", { model: "gemini-subscription-pro", messages: [{ role: "user", content: "think" }], stream: true, max_completion_tokens: 64 });
     assert.equal(res.status, 502);
-    assert.match(res.body, /65 > 64/);
-    assert.doesNotMatch(res.body, /reasoned answer/);
+    assert.match(res.body, /100 > 64/);
+    assert.doesNotMatch(res.body, /way too long/);
   } finally { server.close(); }
 });
 

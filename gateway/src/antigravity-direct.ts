@@ -948,7 +948,12 @@ export function createAntigravityDirectAdapter(config: AntigravityDirectConfig, 
         if (!result.text && result.toolCalls.length === 0) throw new Error("Antigravity stream ended without assistant content or tool calls");
         if (outputLimit !== undefined) {
           if (!terminalUsage) throw new Error("Antigravity response has no trustworthy token usage required by gateway output-token policy");
-          if (terminalUsage.completion_tokens > outputLimit) throw new Error(`Antigravity output exceeded gateway token policy: ${terminalUsage.completion_tokens} > ${outputLimit}`);
+          // Enforce the caller's limit on VISIBLE output only. Reasoning/thought
+          // tokens are separately bounded by the model thinkingBudget and reported
+          // under reasoning_tokens; counting them here would fail a legitimate
+          // thinking-model answer whose visible output is within budget.
+          const visibleOutput = terminalUsage.completion_tokens - (terminalUsage.completion_tokens_details?.reasoning_tokens ?? 0);
+          if (visibleOutput > outputLimit) throw new Error(`Antigravity visible output exceeded gateway token policy: ${visibleOutput} > ${outputLimit}`);
         }
         const finishReason = openAIFinishReason(result.finishReason, result.toolCalls.length > 0);
         if (stream) {
