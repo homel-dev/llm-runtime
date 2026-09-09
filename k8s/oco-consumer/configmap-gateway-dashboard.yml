@@ -13,107 +13,578 @@ data:
       "panels": [
         {
           "type": "stat",
-          "title": "Gateway scrape up",
-          "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "up{job=\"llm-gateway\"}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
-          "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "colorMode": "value", "graphMode": "none", "justifyMode": "auto"}
+          "title": "Gateway",
+          "gridPos": {
+            "h": 2,
+            "w": 3,
+            "x": 0,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "max(up{job=\"llm-gateway\"}) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "\u2014",
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "wideLayout": true
+          }
         },
         {
           "type": "stat",
           "title": "In flight",
-          "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "sum(llm_gateway_requests_in_flight)", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-          "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"}
-        },
-        {
-          "type": "stat",
-          "title": "5xx rate",
-          "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "sum(rate(llm_gateway_upstream_requests_total{status_code=~\"5..\"}[5m])) + sum(rate(llm_gateway_upstream_errors_total[5m]))", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
-          "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"}
-        },
-        {
-          "type": "stat",
-          "title": "Gemini last success age",
-          "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"gemini-subscription\"})", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-          "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"}
-        },
-        {
-          "type": "stat",
-          "title": "OpenAI subscription last success age",
-          "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"subscription\"})", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-          "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto", "colorMode": "value", "graphMode": "area", "justifyMode": "auto"}
-        },
-        {
-          "type": "timeseries",
-          "title": "Request rate by backend/model/status",
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "sum by (backend, model, status_code) (rate(llm_gateway_upstream_requests_total[5m]))", "legendFormat": "{{backend}} / {{model}} / {{status_code}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
-        },
-        {
-          "type": "timeseries",
-          "title": "p95 latency by backend/model",
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "histogram_quantile(0.95, sum by (le, backend, model) (rate(llm_gateway_request_duration_seconds_bucket[5m])))", "legendFormat": "{{backend}} / {{model}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
-        },
-        {
-          "type": "timeseries",
-          "title": "Transport errors/timeouts",
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "sum by (backend, model, reason) (rate(llm_gateway_upstream_errors_total[5m]))", "legendFormat": "{{backend}} / {{model}} / {{reason}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
-        },
-        {
-          "type": "timeseries",
-          "title": "Gateway traffic bytes/sec",
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
+          "gridPos": {
+            "h": 2,
+            "w": 3,
+            "x": 3,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
           "targets": [
-            {"expr": "sum by (backend, model) (rate(llm_gateway_request_bytes_total[5m]))", "legendFormat": "request {{backend}} / {{model}}", "refId": "A"},
-            {"expr": "sum by (backend, model) (rate(llm_gateway_response_bytes_total[5m]))", "legendFormat": "response {{backend}} / {{model}}", "refId": "B"}
+            {
+              "expr": "sum(llm_gateway_requests_in_flight) or vector(0)",
+              "refId": "A"
+            }
           ],
-          "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []}
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "\u2014",
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "type": "stat",
+          "title": "5xx",
+          "gridPos": {
+            "h": 2,
+            "w": 3,
+            "x": 6,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "(sum(rate(llm_gateway_upstream_requests_total{status_code=~\"5..\"}[5m])) + sum(rate(llm_gateway_upstream_errors_total[5m]))) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "\u2014",
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Gemini success age",
+          "gridPos": {
+            "h": 2,
+            "w": 7,
+            "x": 9,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"gemini-subscription\"})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "\u2014",
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "wideLayout": true
+          }
+        },
+        {
+          "type": "stat",
+          "title": "OpenAI success age",
+          "gridPos": {
+            "h": 2,
+            "w": 8,
+            "x": 16,
+            "y": 0
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"subscription\"})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "noValue": "\u2014",
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "wideLayout": true
+          }
         },
         {
           "type": "timeseries",
-          "title": "Locally rejected requests",
-          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "sum by (reason, status_code) (rate(llm_gateway_rejected_requests_total[5m]))", "legendFormat": "{{reason}} / {{status_code}}", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+          "title": "Request rate",
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 2
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by (backend, model, status_code) (rate(llm_gateway_upstream_requests_total[5m]))",
+              "legendFormat": "{{backend}} \u00b7 {{model}} \u00b7 {{status_code}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "fillOpacity": 20,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
         },
         {
           "type": "timeseries",
-          "title": "Gateway process RSS",
-          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
-          "datasource": {"type": "prometheus", "uid": "llm-runtime-prometheus"},
-          "targets": [{"expr": "llm_gateway_process_resident_memory_bytes", "legendFormat": "RSS", "refId": "A"}],
-          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []}
+          "title": "Latency \u00b7 p95",
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 2
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, backend, model) (rate(llm_gateway_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{backend}} \u00b7 {{model}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "fillOpacity": 8,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Transport errors / timeouts",
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by (backend, model, reason) (rate(llm_gateway_upstream_errors_total[5m]))",
+              "legendFormat": "{{backend}} \u00b7 {{model}} \u00b7 {{reason}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "bars",
+                "lineInterpolation": "smooth",
+                "lineWidth": 0,
+                "fillOpacity": 45,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Gateway traffic \u00b7 IN / OUT",
+          "description": "Network-style traffic: upstream responses received by the gateway are IN above zero; requests sent upstream are OUT mirrored below zero. Negative-Y is display-only, so tooltips and legend keep positive byte rates.",
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 8
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by (backend, model) (rate(llm_gateway_response_bytes_total[5m]))",
+              "legendFormat": "IN \u00b7 {{backend}} \u00b7 {{model}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum by (backend, model) (rate(llm_gateway_request_bytes_total[5m]))",
+              "legendFormat": "OUT \u00b7 {{backend}} \u00b7 {{model}}",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "fillOpacity": 40,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": true,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "custom.transform",
+                    "value": "negative-Y"
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Local rejects",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum by (reason, status_code) (rate(llm_gateway_rejected_requests_total[5m]))",
+              "legendFormat": "{{reason}} \u00b7 {{status_code}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "drawStyle": "bars",
+                "lineInterpolation": "smooth",
+                "lineWidth": 0,
+                "fillOpacity": 42,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Gateway RSS",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "llm_gateway_process_resident_memory_bytes",
+              "legendFormat": "RSS",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "fillOpacity": 32,
+                "gradientMode": "opacity",
+                "showPoints": "never",
+                "spanNulls": false,
+                "axisPlacement": "auto",
+                "axisCenteredZero": false,
+                "stacking": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          }
         }
       ],
       "refresh": "10s",
       "schemaVersion": 39,
-      "tags": ["llm-runtime", "gateway", "subscriptions"],
-      "time": {"from": "now-30m", "to": "now"},
+      "tags": [
+        "llm-runtime",
+        "gateway",
+        "subscriptions"
+      ],
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
       "timezone": "browser",
       "title": "LLM Runtime Gateway",
       "uid": "llm-runtime-gateway",
-      "version": 1
+      "version": 2
     }
