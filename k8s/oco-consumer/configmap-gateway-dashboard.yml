@@ -27,7 +27,10 @@ data:
           "targets": [
             {
               "expr": "max(up{job=\"llm-gateway\"}) or vector(0)",
-              "refId": "A"
+              "refId": "A",
+              "legendFormat": "Gateway",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
@@ -59,9 +62,9 @@ data:
               "values": false
             },
             "orientation": "horizontal",
-            "textMode": "value_and_name",
+            "textMode": "value",
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "wideLayout": true
           }
@@ -82,7 +85,10 @@ data:
           "targets": [
             {
               "expr": "sum(llm_gateway_requests_in_flight) or vector(0)",
-              "refId": "A"
+              "refId": "A",
+              "legendFormat": "In flight",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
@@ -101,9 +107,9 @@ data:
               "values": false
             },
             "orientation": "horizontal",
-            "textMode": "value_and_name",
+            "textMode": "value",
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "wideLayout": true
           }
@@ -124,7 +130,10 @@ data:
           "targets": [
             {
               "expr": "(sum(rate(llm_gateway_upstream_requests_total{status_code=~\"5..\"}[5m])) + sum(rate(llm_gateway_upstream_errors_total[5m]))) or vector(0)",
-              "refId": "A"
+              "refId": "A",
+              "legendFormat": "5xx",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
@@ -143,9 +152,9 @@ data:
               "values": false
             },
             "orientation": "horizontal",
-            "textMode": "value_and_name",
+            "textMode": "value",
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "wideLayout": true
           }
@@ -166,7 +175,10 @@ data:
           "targets": [
             {
               "expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"gemini-subscription\"})",
-              "refId": "A"
+              "refId": "A",
+              "legendFormat": "Gemini success age",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
@@ -185,9 +197,9 @@ data:
               "values": false
             },
             "orientation": "horizontal",
-            "textMode": "value_and_name",
+            "textMode": "value",
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "wideLayout": true
           }
@@ -208,7 +220,10 @@ data:
           "targets": [
             {
               "expr": "time() - max(llm_gateway_backend_last_success_timestamp_seconds{backend=\"subscription\"})",
-              "refId": "A"
+              "refId": "A",
+              "legendFormat": "OpenAI success age",
+              "instant": false,
+              "range": true
             }
           ],
           "fieldConfig": {
@@ -227,9 +242,9 @@ data:
               "values": false
             },
             "orientation": "horizontal",
-            "textMode": "value_and_name",
+            "textMode": "value",
             "colorMode": "value",
-            "graphMode": "none",
+            "graphMode": "area",
             "justifyMode": "auto",
             "wideLayout": true
           }
@@ -586,5 +601,5 @@ data:
       "timezone": "browser",
       "title": "LLM Runtime Gateway",
       "uid": "llm-runtime-gateway",
-      "version": 2
+      "version": 3
     }
