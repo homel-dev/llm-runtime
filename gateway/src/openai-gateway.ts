@@ -454,7 +454,13 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
           safeHeaders[name] = value;
         }
         const status = upstreamRes.statusCode ?? 502;
-        const validateSubscriptionOutput = backend.id === "subscription" && policy.outputTokenLimit !== undefined;
+        // Codex Responses accepts max_output_tokens natively. When no global
+        // gateway cap is configured, preserve real SSE streaming instead of
+        // buffering the whole response merely to re-check the caller's own
+        // native limit. Chat Completions still uses post-response verification,
+        // and an explicit gateway cap keeps fail-closed verification enabled.
+        const validateSubscriptionOutput = backend.id === "subscription" && policy.outputTokenLimit !== undefined &&
+          (pathname !== "/v1/responses" || config.maxOutputTokens > 0);
         if (!validateSubscriptionOutput) {
           clientRes.writeHead(status, safeHeaders);
           let responseBytes = 0;

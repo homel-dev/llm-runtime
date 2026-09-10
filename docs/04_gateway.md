@@ -314,17 +314,22 @@ through unbuffered.
 
 Output-token limits are capability-aware. The effective limit is the smaller of
 the client-requested limit and `GATEWAY_MAX_OUTPUT_TOKENS` when the gateway cap
-is enabled. ChatGPT/Codex OAuth rejects native `max_output_tokens`, so
-subscription non-streaming responses are buffered only until their upstream
-usage can be verified; verified responses retain their exact upstream body
-bytes. Missing/untrustworthy usage or an over-limit result fails closed, and
-subscription streaming fails closed while a limit is active because already
-emitted SSE bytes cannot be revoked. With no client or gateway limit,
-subscription responses remain raw passthrough. Gemini's CLI likewise has no
-native output-token limit, so the adapter verifies Antigravity usage before
-releasing a completed response. These checks bound what reaches the consumer;
-they do not claim to cap provider-side generation cost for subscription-backed
-transports.
+is enabled. ChatGPT/Codex Chat Completions is adapter-backed and therefore keeps
+the fail-closed post-response verification path: bounded subscription responses
+are buffered until terminal usage proves the effective limit was respected.
+
+ChatGPT/Codex Responses is different: `max_output_tokens` is native to the
+Responses transport. When `GATEWAY_MAX_OUTPUT_TOKENS=0`, the gateway forwards
+the caller's `max_output_tokens` and streams the upstream SSE response directly;
+it does not buffer the entire response merely to re-check that caller-owned
+native limit. Setting a non-zero `GATEWAY_MAX_OUTPUT_TOKENS` opts back into the
+gateway's fail-closed post-response verification and buffering for Responses as
+well.
+
+Gemini's CLI likewise has no native output-token limit, so the adapter verifies
+Antigravity usage before releasing a completed response. These checks bound what
+reaches the consumer; they do not claim to cap provider-side generation cost for
+subscription-backed transports.
 
 Unsupported paths or provider capabilities fail explicitly.
 

@@ -457,6 +457,22 @@ test("OpenAI subscription Responses API streaming fails closed when output_token
   } finally { server.close(); }
 });
 
+test("OpenAI subscription Responses API is not post-buffered when the global gateway cap is disabled", async () => {
+  const uncapped: GatewayConfig = { ...base, maxOutputTokens: 0 };
+  const over = RESPONSES_SSE_OK.replace('"output_tokens":7', '"output_tokens":9');
+  const captured: Captured[] = [];
+  const server = createGateway(uncapped, staticResponseRequester(over, 200, { "content-type": "text/event-stream" }, captured));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const res = await callServer(port, "/v1/responses", { "content-type": "application/json" }, JSON.stringify({ model: "gpt-sub", stream: true, max_output_tokens: 8, input: "x" }));
+    assert.equal(res.status, 200);
+    assert.equal(res.body, over);
+    const forwarded = JSON.parse(captured[0]!.body);
+    assert.equal(forwarded.max_output_tokens, 8);
+  } finally { server.close(); }
+});
+
 test("OpenAI subscription Responses API streaming fails closed when the terminal event is not the last semantic event", async () => {
   const trailing = [
     'event: response.output_text.delta',
