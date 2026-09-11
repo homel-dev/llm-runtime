@@ -120,6 +120,7 @@ spec:
             - { name: HOME, value: /auth/home }
             - { name: CODEX_HOME, value: /auth }
             - { name: npm_config_cache, value: /tmp/npm-cache }
+            - { name: NODE_OPTIONS, value: "--import=/app/dist/src/openai-oauth-session-cache.js" }
           args:
             - --host
             - 127.0.0.1
