@@ -318,10 +318,19 @@ function safeString(value: unknown, fallback: string): string {
 }
 
 function normalizeUpstreamBody(body: JsonRecord, sessionId?: string): JsonRecord {
-  const include = Array.isArray(body.include) ? [...body.include] : [];
+  const upstream = { ...body };
+  // ChatGPT's Codex Responses backend does not accept the public Responses
+  // max-token request fields. The gateway may receive them from generic
+  // OpenAI-Responses clients, but the dedicated Codex transport must not
+  // forward them to /backend-api/codex/responses.
+  delete upstream.max_output_tokens;
+  delete upstream.max_completion_tokens;
+  delete upstream.max_tokens;
+
+  const include = Array.isArray(upstream.include) ? [...upstream.include] : [];
   if (!include.includes("reasoning.encrypted_content")) include.push("reasoning.encrypted_content");
   return {
-    ...body,
+    ...upstream,
     store: false,
     stream: true,
     ...(sessionId ? { prompt_cache_key: sessionId } : {}),

@@ -167,7 +167,14 @@ test("transport reuses one Codex websocket and sends previous_response_id plus o
 
   try {
     const user = { role: "user", content: [{ type: "input_text", text: "first" }] };
-    await post({ model: "gpt-5.6-sol", stream: true, store: false, prompt_cache_key: "rr-session", input: [user] });
+    await post({
+      model: "gpt-5.6-sol",
+      stream: true,
+      store: false,
+      prompt_cache_key: "rr-session",
+      max_output_tokens: 1024,
+      input: [user],
+    });
     const firstAssistant = {
       type: "message",
       id: "msg_1",
@@ -181,12 +188,15 @@ test("transport reuses one Codex websocket and sends previous_response_id plus o
       stream: true,
       store: false,
       prompt_cache_key: "rr-session",
+      max_output_tokens: 1024,
       input: [user, firstAssistant, nextUser],
     });
 
     assert.equal(connections, 1);
     assert.equal(received.length, 2);
     assert.equal(received[0]!.previous_response_id, undefined);
+    assert.equal(received[0]!.max_output_tokens, undefined);
+    assert.equal(received[1]!.max_output_tokens, undefined);
     assert.equal(received[1]!.previous_response_id, "resp_1");
     assert.deepEqual(received[1]!.input, [nextUser]);
     const stats = transport.getStats();
