@@ -34,6 +34,7 @@ function config(authFile: string, baseUrl = "https://chatgpt.com/backend-api"): 
     authFile,
     models: ["gpt-5.6-sol"],
     maxBodyBytes: 1024 * 1024,
+    wsMaxBodyBytes: 170 * 1024,
     requestTimeoutMs: 5000,
     websocketConnectTimeoutMs: 1000,
     sessionIdleMs: 60_000,

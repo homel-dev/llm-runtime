@@ -21,6 +21,7 @@ export interface CodexTransportConfig {
   authFile: string;
   models: string[];
   maxBodyBytes: number;
+  wsMaxBodyBytes: number;
   requestTimeoutMs: number;
   websocketConnectTimeoutMs: number;
   sessionIdleMs: number;
@@ -128,6 +129,7 @@ export function loadCodexTransportConfigFromEnv(env: NodeJS.ProcessEnv = process
     authFile: env.CODEX_TRANSPORT_AUTH_FILE ?? "/auth/auth.json",
     models: csv(env.CODEX_TRANSPORT_MODELS, ["gpt-5.6-sol"]),
     maxBodyBytes: positiveInt("CODEX_TRANSPORT_MAX_BODY_BYTES", env.CODEX_TRANSPORT_MAX_BODY_BYTES, 8 * 1024 * 1024),
+    wsMaxBodyBytes: positiveInt("CODEX_TRANSPORT_WS_MAX_BODY_BYTES", env.CODEX_TRANSPORT_WS_MAX_BODY_BYTES, 170 * 1024),
     requestTimeoutMs: positiveInt("CODEX_TRANSPORT_TIMEOUT_MS", env.CODEX_TRANSPORT_TIMEOUT_MS, 900_000),
     websocketConnectTimeoutMs: positiveInt("CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS", env.CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS, 15_000),
     sessionIdleMs: positiveInt("CODEX_TRANSPORT_SESSION_IDLE_MS", env.CODEX_TRANSPORT_SESSION_IDLE_MS, 5 * 60 * 1000),
@@ -262,25 +264,47 @@ function replayItemsEqual(a: unknown, b: unknown): boolean {
   return jsonEqual(normalizeReplayItem(a), normalizeReplayItem(b));
 }
 
+export interface ContinuationResult {
+  body: JsonRecord;
+  usedContinuation: boolean;
+  missReason?: string;
+  missDetail?: JsonRecord;
+}
+
+function itemType(value: unknown): unknown {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord).type : undefined;
+}
+
+function changedTopKeys(a: JsonRecord, b: JsonRecord): string[] {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+}
+
 export function buildContinuationRequest(
   fullBody: JsonRecord,
   continuation: CodexContinuation | undefined,
-): { body: JsonRecord; usedContinuation: boolean } {
-  if (!continuation) return { body: fullBody, usedContinuation: false };
-  if (!jsonEqual(requestWithoutInput(fullBody), requestWithoutInput(continuation.lastRequestBody))) {
-    return { body: fullBody, usedContinuation: false };
+): ContinuationResult {
+  if (!continuation) return { body: fullBody, usedContinuation: false, missReason: "no_continuation" };
+  const aNoInput = requestWithoutInput(fullBody);
+  const bNoInput = requestWithoutInput(continuation.lastRequestBody);
+  if (!jsonEqual(aNoInput, bNoInput)) {
+    return { body: fullBody, usedContinuation: false, missReason: "static_body_changed", missDetail: { changedKeys: changedTopKeys(aNoInput, bNoInput) } };
   }
   const current = Array.isArray(fullBody.input) ? fullBody.input : undefined;
   const previous = Array.isArray(continuation.lastRequestBody.input) ? continuation.lastRequestBody.input : undefined;
-  if (!current || !previous) return { body: fullBody, usedContinuation: false };
+  if (!current || !previous) return { body: fullBody, usedContinuation: false, missReason: "input_not_array" };
   const baselineLength = previous.length + continuation.lastResponseItems.length;
-  if (current.length < baselineLength) return { body: fullBody, usedContinuation: false };
+  if (current.length < baselineLength) {
+    return { body: fullBody, usedContinuation: false, missReason: "input_shorter_than_baseline", missDetail: { currentLen: current.length, baselineLength } };
+  }
   for (let i = 0; i < previous.length; i++) {
-    if (!jsonEqual(current[i], previous[i])) return { body: fullBody, usedContinuation: false };
+    if (!jsonEqual(current[i], previous[i])) {
+      return { body: fullBody, usedContinuation: false, missReason: "prev_input_mismatch", missDetail: { index: i, storedType: itemType(previous[i]), clientType: itemType(current[i]) } };
+    }
   }
   for (let i = 0; i < continuation.lastResponseItems.length; i++) {
     if (!replayItemsEqual(current[previous.length + i], continuation.lastResponseItems[i])) {
-      return { body: fullBody, usedContinuation: false };
+      return { body: fullBody, usedContinuation: false, missReason: "response_item_mismatch", missDetail: { index: i, storedType: itemType(continuation.lastResponseItems[i]), clientType: itemType(current[previous.length + i]) } };
     }
   }
   return {
@@ -522,7 +546,29 @@ export class CodexTransport {
     let credential = await this.auth.credential();
     let entry = await this.acquireSession(sessionId, credential, requestId);
     let continuation = buildContinuationRequest(fullBody, entry?.continuation);
-    if (entry?.continuation && !continuation.usedContinuation) this.stats.continuationMisses++;
+    if (entry?.continuation && !continuation.usedContinuation) {
+      this.stats.continuationMisses++;
+      this.log({ event: "codex.continuation_miss", requestId, sessionId, reason: continuation.missReason, detail: continuation.missDetail });
+    }
+
+    // Layer A: never send an oversized frame over the WebSocket. ChatGPT's Codex
+    // WS backend drops inbound frames past ~171 KiB, which then only surfaces as a
+    // 900s idle timeout. Divert oversized bodies straight to the HTTP SSE path,
+    // which has no WS frame cap. The size measured here is exactly what would be
+    // sent to socket.send (the `response.create` envelope).
+    const chosenUpstreamBytes = Buffer.byteLength(JSON.stringify({ type: "response.create", ...continuation.body }));
+    if (chosenUpstreamBytes > this.config.wsMaxBodyBytes) {
+      this.stats.lastFullRequestBytes = fullBytes;
+      this.stats.lastUpstreamRequestBytes = chosenUpstreamBytes;
+      this.log({ event: "codex.ws_bypass", requestId, sessionId, upstreamRequestBytes: chosenUpstreamBytes, threshold: this.config.wsMaxBodyBytes, usedContinuation: continuation.usedContinuation });
+      if (entry && sessionId) {
+        entry.continuation = undefined;
+        this.disposeEntry(entry, "ws-bypass");
+        this.sessions.delete(sessionId);
+      }
+      await this.fallbackSse(fullBody, sessionId, stream, res, new Error(`upstream body ${chosenUpstreamBytes}B over WS cap ${this.config.wsMaxBodyBytes}B`));
+      return;
+    }
 
     const run = async (targetEntry: SessionEntry | undefined, body: JsonRecord, usedContinuation: boolean): Promise<WsRunResult> => {
       const upstreamBytes = Buffer.byteLength(JSON.stringify({ type: "response.create", ...body }));
