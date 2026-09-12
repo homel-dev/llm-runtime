@@ -127,6 +127,8 @@ APIs from the `openai` compatibility declaration.
 For the gateway:
 
 - allowed paths are `/v1/models`, `/v1/chat/completions`, and `/v1/responses`;
+- the ChatGPT/Codex subscription model supports `/v1/responses`; its transport is
+  Responses-only and rejects Chat Completions;
 - Gemini subscription models support Chat Completions;
 - `/v1/responses` returns HTTP 501 for Gemini subscription models;
 - `stream: true` for Gemini returns OpenAI-compatible SSE framing after the
@@ -145,7 +147,7 @@ Current gateway model IDs are:
 
 | Consumer model ID | Current trusted implementation |
 | --- | --- |
-| `gpt-5.6-sol` | ChatGPT/Codex subscription through `openai-oauth` |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription through the stateful Codex Responses transport |
 | `gemini-subscription-pro` | Antigravity model `gemini-3.1-pro-high` |
 | `gemini-subscription-auto` | Antigravity model `gemini-3.7-flash-medium` |
 

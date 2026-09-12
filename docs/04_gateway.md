@@ -9,6 +9,7 @@
 - [Status and Authority](#status-and-authority)
 - [Ownership](#ownership)
 - [Backends](#backends)
+- [Codex Subscription Transport](#codex-subscription-transport)
 - [Gemini Subscription Transport](#gemini-subscription-transport)
 - [Build and Verify](#build-and-verify)
 - [Authenticate Google AI Subscription](#authenticate-google-ai-subscription)
@@ -73,7 +74,7 @@ backends in the same Pod.
 
 | Gateway model | Backend | Transport |
 | --- | --- | --- |
-| `gpt-5.6-sol` | ChatGPT/Codex subscription | `openai-oauth` on `127.0.0.1:10531` |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription | Stateful Codex Responses WebSocket transport on `127.0.0.1:10533` |
 | `gemini-subscription-pro` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-pro-agent` on `127.0.0.1:10532` |
 | `gemini-subscription-auto` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-3.7-flash-medium` on `127.0.0.1:10532` |
 
@@ -82,6 +83,35 @@ dynamic model selection.
 
 Routing authority is constrained by the configured model table. Requests for
 unadvertised models fail rather than being forwarded to an arbitrary provider.
+
+[Back to top](#llm-gateway)
+
+---
+
+## Codex Subscription Transport
+
+`gpt-5.6-sol` uses a dedicated loopback Codex transport rather than the generic
+Chat Completions compatibility proxy. The transport reads the official Codex
+`auth.json` written by `task gateway:openai:login`, refreshes ChatGPT OAuth
+credentials when required, and talks directly to the ChatGPT Codex Responses
+backend.
+
+The provider path is Responses-only. The transport keeps a WebSocket session per
+stable `prompt_cache_key`. After the first full request it records the provider
+response ID and output items. If the next client request is an exact extension
+of that conversation, the upstream request contains only the new input plus
+`previous_response_id`; the full history is not replayed to ChatGPT. A changed
+static request body or mismatched history fails back to a full request.
+
+The transport keeps `store: false`, propagates encrypted reasoning state, scopes
+cached WebSockets to the authenticated ChatGPT account, serializes turns within
+one session, and drops continuation state when the WebSocket is no longer
+usable. If WebSocket setup fails before any downstream bytes are emitted, it can
+fall back to direct Codex Responses SSE for that request.
+
+`task gateway:check PROVIDER=openai` performs two Responses turns with one cache
+key and verifies through loopback transport statistics that the second turn used
+delta continuation and sent fewer upstream bytes than the full client request.
 
 [Back to top](#llm-gateway)
 

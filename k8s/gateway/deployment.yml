@@ -70,7 +70,7 @@ spec:
             - { name: GATEWAY_ALLOWED_ENDPOINTS, value: "/v1/chat/completions,/v1/responses,/v1/models" }
             - { name: GATEWAY_SUBSCRIPTION_MODELS, value: "gpt-5.6-sol" }
             - { name: GATEWAY_SUBSCRIPTION_HOST, value: "127.0.0.1" }
-            - { name: GATEWAY_SUBSCRIPTION_PORT, value: "10531" }
+            - { name: GATEWAY_SUBSCRIPTION_PORT, value: "10533" }
             - { name: GATEWAY_GEMINI_MODELS, value: "gemini-subscription-pro,gemini-subscription-auto" }
             - { name: GATEWAY_GEMINI_HOST, value: "127.0.0.1" }
             - { name: GATEWAY_GEMINI_PORT, value: "10532" }
@@ -112,27 +112,50 @@ spec:
             requests: { cpu: "50m", memory: "64Mi" }
             limits: { cpu: "500m", memory: "256Mi" }
 
-        - name: subscription
+        - name: codex-subscription
           image: ghcr.io/homel-dev/llm-runtime-gateway:main
           imagePullPolicy: Always
-          command: [openai-oauth]
+          command: [node, /app/dist/src/run-codex-transport.js]
           env:
-            - { name: HOME, value: /auth/home }
-            - { name: CODEX_HOME, value: /auth }
-            - { name: npm_config_cache, value: /tmp/npm-cache }
-            - { name: NODE_OPTIONS, value: "--import=/app/dist/src/openai-oauth-session-cache.js" }
-          args:
-            - --host
-            - 127.0.0.1
-            - --port
-            - "10531"
-            - --oauth-file
-            - /auth/auth.json
-            - --models
-            - gpt-5.6-sol
+            - { name: CODEX_TRANSPORT_LISTEN_HOST, value: "127.0.0.1" }
+            - { name: CODEX_TRANSPORT_LISTEN_PORT, value: "10533" }
+            - { name: CODEX_TRANSPORT_MODELS, value: "gpt-5.6-sol" }
+            - { name: CODEX_TRANSPORT_AUTH_FILE, value: /auth/auth.json }
+            - { name: CODEX_TRANSPORT_BASE_URL, value: "https://chatgpt.com/backend-api" }
+            - { name: CODEX_TRANSPORT_TIMEOUT_MS, value: "900000" }
+            - { name: CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS, value: "15000" }
+            - { name: CODEX_TRANSPORT_SESSION_IDLE_MS, value: "300000" }
+            - { name: CODEX_TRANSPORT_SESSION_MAX_AGE_MS, value: "3300000" }
+            - { name: CODEX_TRANSPORT_MAX_BODY_BYTES, value: "8388608" }
           volumeMounts:
             - { name: subscription-auth, mountPath: /auth }
-            - { name: subscription-tmp, mountPath: /tmp }
+          startupProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10533/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10533/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - 'fetch("http://127.0.0.1:10533/healthz").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -142,7 +165,7 @@ spec:
             capabilities:
               drop: [ALL]
           resources:
-            requests: { cpu: "50m", memory: "128Mi" }
+            requests: { cpu: "100m", memory: "128Mi" }
             limits: { cpu: "1000m", memory: "512Mi" }
 
         - name: gemini-subscription
@@ -213,8 +236,6 @@ spec:
         - name: subscription-auth
           persistentVolumeClaim:
             claimName: rr-openai-subscription-auth
-        - name: subscription-tmp
-          emptyDir: {}
         - name: gemini-auth
           persistentVolumeClaim:
             claimName: rr-gemini-subscription-auth

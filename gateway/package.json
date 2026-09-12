@@ -13,8 +13,12 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "verify": "npm run typecheck && npm test"
   },
+  "dependencies": {
+    "ws": "8.21.3"
+  },
   "devDependencies": {
     "@types/node": "24.0.4",
+    "@types/ws": "8.18.1",
     "typescript": "5.9.3"
   }
 }

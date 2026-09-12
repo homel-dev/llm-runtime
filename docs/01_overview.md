@@ -185,7 +185,7 @@ Current advertised model aliases are:
 
 | Gateway model | Trusted backend |
 | --- | --- |
-| `gpt-5.6-sol` | `openai-oauth` on loopback port 10531 |
+| `gpt-5.6-sol` | Stateful Codex Responses transport on loopback port 10533 |
 | `gemini-subscription-pro` | Antigravity `gemini-3.1-pro-high` on loopback port 10532 |
 | `gemini-subscription-auto` | Antigravity `gemini-3.7-flash-medium` on loopback port 10532 |
 

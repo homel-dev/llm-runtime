@@ -14,8 +14,8 @@ import { checkSubscriptionResponseOutputBudget, checkSubscriptionStreamOutputBud
  *
  * Backends:
  *  - api: api.openai.com with a gateway-owned API key;
- *  - subscription: loopback OpenAI-compatible OAuth proxy (openai-oauth) that
- *    owns the ChatGPT/Codex OAuth session and refresh lifecycle;
+ *  - subscription: loopback stateful Codex Responses transport that owns the
+ *    ChatGPT OAuth session, WebSocket continuation, and refresh lifecycle;
  *  - gemini-subscription: loopback Antigravity adapter. The adapter invokes Google Antigravity CLI
  *    using a cached Google-account subscription session;
  *  - local-small/local-medium/local-large: trusted in-cluster OpenAI-compatible
@@ -151,7 +151,7 @@ export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
       id: "subscription",
       protocol: "http",
       host,
-      port: validPort("GATEWAY_SUBSCRIPTION_PORT", Number(env.GATEWAY_SUBSCRIPTION_PORT ?? "10531")),
+      port: validPort("GATEWAY_SUBSCRIPTION_PORT", Number(env.GATEWAY_SUBSCRIPTION_PORT ?? "10533")),
       models: subscriptionModels,
     });
   }

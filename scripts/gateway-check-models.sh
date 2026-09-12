@@ -69,6 +69,90 @@ for (const entry of models) {
   const backend = String(entry.owned_by ?? "").replace(/^llm-runtime-/, "");
   const model = String(entry.id);
   console.log(`[CHECK] backend=${backend} model=${model}`);
+
+  // The ChatGPT subscription backend is Responses-only. Its health probe also
+  // verifies that the second logical turn is sent upstream as a Codex
+  // previous_response_id delta rather than replaying the full client context.
+  if (backend === "subscription") {
+    try {
+      const codexPort = process.env.GATEWAY_SUBSCRIPTION_PORT ?? "10533";
+      const statsUrl = `http://127.0.0.1:${codexPort}/debug/stats`;
+      const readStats = async () => {
+        const { response, text } = await requestText(statsUrl);
+        if (!response.ok) throw new Error(`Codex transport stats HTTP ${response.status}: ${text}`);
+        return JSON.parse(text);
+      };
+      const parseResponsesSse = (text) => {
+        const output = [];
+        let terminal;
+        for (const line of text.split("\n")) {
+          const normalized = line.endsWith("\r") ? line.slice(0, -1) : line;
+          if (!normalized.startsWith("data:")) continue;
+          const raw = normalized.slice(5).trim();
+          if (!raw || raw === "[DONE]") continue;
+          let event;
+          try { event = JSON.parse(raw); }
+          catch { throw new Error(`Responses stream emitted non-JSON data event: ${raw}`); }
+          if (event?.type === "response.output_item.done" && event.item) output.push(event.item);
+          if (["response.completed", "response.done", "response.incomplete"].includes(event?.type)) {
+            terminal = event.response;
+            if (Array.isArray(event?.response?.output) && event.response.output.length) {
+              output.splice(0, output.length, ...event.response.output);
+            }
+          }
+        }
+        if (!terminal) throw new Error("Responses stream has no terminal response event");
+        return { terminal, output };
+      };
+      const postResponses = async (input, promptCacheKey) => {
+        const { response, text } = await requestText(`${base}/v1/responses`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model,
+            input,
+            stream: true,
+            store: false,
+            prompt_cache_key: promptCacheKey,
+            max_output_tokens: 1024,
+          }),
+        });
+        if (!response.ok) throw new Error(`Responses HTTP ${response.status}: ${text}`);
+        const contentType = response.headers.get("content-type") ?? "";
+        if (!contentType.includes("text/event-stream")) throw new Error(`Responses expected text/event-stream, got ${contentType || "unset"}`);
+        return parseResponsesSse(text);
+      };
+
+      const before = await readStats();
+      const promptCacheKey = `gwcheck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      const firstInput = [{ role: "user", content: [{ type: "input_text", text: "Reply exactly with OK." }] }];
+      const first = await postResponses(firstInput, promptCacheKey);
+      if (first.terminal?.status && first.terminal.status !== "completed") {
+        throw new Error(`first Responses turn did not complete: ${first.terminal.status}`);
+      }
+      if (!first.output.length) throw new Error("first Responses turn exposed no replayable output items");
+
+      const secondUser = { role: "user", content: [{ type: "input_text", text: "Reply exactly with OK again." }] };
+      const second = await postResponses([...firstInput, ...first.output, secondUser], promptCacheKey);
+      if (second.terminal?.status && second.terminal.status !== "completed") {
+        throw new Error(`second Responses turn did not complete: ${second.terminal.status}`);
+      }
+      const after = await readStats();
+      if (!Number.isFinite(after?.deltaRequests) || after.deltaRequests <= Number(before?.deltaRequests ?? 0)) {
+        throw new Error(`Codex transport did not record a delta continuation: before=${before?.deltaRequests} after=${after?.deltaRequests}`);
+      }
+      if (!Number.isFinite(after?.lastFullRequestBytes) || !Number.isFinite(after?.lastUpstreamRequestBytes) ||
+          after.lastUpstreamRequestBytes >= after.lastFullRequestBytes) {
+        throw new Error(`Codex delta did not reduce upstream bytes: full=${after?.lastFullRequestBytes} upstream=${after?.lastUpstreamRequestBytes}`);
+      }
+      console.log(`[PASS] backend=${backend} model=${model} responses_delta upstream_bytes=${after.lastUpstreamRequestBytes} full_bytes=${after.lastFullRequestBytes}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${backend}/${model} (responses continuation): ${message}`);
+      console.error(`[FAIL] backend=${backend} model=${model} (responses continuation) ${message}`);
+    }
+    continue;
+  }
   try {
     const { response, text } = await requestText(`${base}/v1/chat/completions`, {
       method: "POST",
