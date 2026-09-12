@@ -13,6 +13,10 @@ metadata:
 
 spec:
   replicas: 1
+  # Singleton GPU workload consumes three GPUs; a surge rollout cannot schedule
+  # beside the current Pod. Delete the old Pod before creating the new one.
+  strategy:
+    type: Recreate
 
   selector:
     matchLabels:
@@ -29,7 +33,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: vllm/vllm-openai:latest
+          image: vllm/vllm-openai:v0.29.0-cu130
           imagePullPolicy: IfNotPresent
 
           args:
@@ -48,12 +52,14 @@ spec:
             - "1"
             - --pipeline-parallel-size
             - "3"
+            - --hf-overrides
+            - '{"rope_parameters":{"factor":2.0,"original_max_position_embeddings":32768,"rope_theta":1000000,"rope_type":"yarn"}}'
             - --max-model-len
-            - "32768"
+            - "65536"
             - --gpu-memory-utilization
             - "0.92"
             - --max-num-seqs
-            - "16"
+            - "4"
             - --enforce-eager
             - --no-async-scheduling
             - --structured-outputs-config.backend
