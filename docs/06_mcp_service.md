@@ -1,153 +1,163 @@
+<a id="top" name="top"></a>
 
+# MCP Gateway — Envoy AI Gateway Integration
 
+*Controlled MCP ingress for shared runtime capabilities.*
 
+---
 
-MCP Gateway — Envoy AI Gateway Integration
+## Table of Contents
 
-Controlled MCP ingress for shared runtime capabilities.
+- [0. Status, Scope, and Authority](#0-status-scope-and-authority)
+- [1. Architecture Decision](#1-architecture-decision)
+- [2. Purpose](#2-purpose)
+- [3. High-Level Architecture](#3-high-level-architecture)
+- [4. Ownership Boundary](#4-ownership-boundary)
+- [5. Client Contract](#5-client-contract)
+- [6. Backend Model](#6-backend-model)
+- [7. Capability Exposure](#7-capability-exposure)
+- [8. Initial Backend — Memory Steward](#8-initial-backend--memory-steward)
+- [9. Network Boundary](#9-network-boundary)
+- [10. Authentication and Credentials](#10-authentication-and-credentials)
+- [11. Observability](#11-observability)
+- [12. Deployment and Configuration](#12-deployment-and-configuration)
+- [13. Validation and Acceptance](#13-validation-and-acceptance)
+- [14. Failure Semantics](#14-failure-semantics)
+- [15. Versioning and Upgrade Policy](#15-versioning-and-upgrade-policy)
+- [16. Non-Goals](#16-non-goals)
+- [17. Tradeoffs and Known Constraints](#17-tradeoffs-and-known-constraints)
+- [18. Core Invariants](#18-core-invariants)
 
-⸻
+---
 
-Table of Contents
+## 0. Status, Scope, and Authority
 
-* 0. Status, Scope, and Authority
-* 1. Architecture Decision
-* 2. Purpose
-* 3. High-Level Architecture
-* 4. Ownership Boundary
-* 5. Client Contract
-* 6. Backend Model
-* 7. Capability Exposure
-* 8. Initial Backend — Memory Steward
-* 9. Network Boundary
-* 10. Authentication and Credentials
-* 11. Observability
-* 12. Deployment and Configuration
-* 13. Validation and Acceptance
-* 14. Failure Semantics
-* 15. Versioning and Upgrade Policy
-* 16. Non-Goals
-* 17. Tradeoffs and Known Constraints
-* 18. Core Invariants
+**Status:** APPROVED ARCHITECTURE — implementation pending.
 
-⸻
+**Scope:** `llm-runtime`.
 
-0. Status, Scope, and Authority
+**Selected implementation:** Envoy AI Gateway using `MCPRoute`.
 
-Status: APPROVED ARCHITECTURE — implementation pending.
+This document defines how `llm-runtime` exposes MCP capabilities.
 
-Scope: llm-runtime.
+It does **not** define a custom MCP gateway implementation.
 
-Selected implementation: Envoy AI Gateway using MCPRoute.
+`llm-runtime` has authority over:
 
-This document defines how llm-runtime exposes MCP capabilities.
-
-It does not define a custom MCP gateway implementation.
-
-llm-runtime has authority over:
-
-* deployment of the MCP ingress;
-* Envoy AI Gateway configuration owned by this repository;
-* Gateway, MCPRoute, backend-routing, and related policy resources;
-* public MCP capability exposure;
-* network boundaries;
-* runtime-level authentication and backend credential handling;
-* runtime-level telemetry;
-* deployment, validation, upgrade, and rollback procedures.
+- deployment of the MCP ingress;
+- Envoy AI Gateway configuration owned by this repository;
+- `Gateway`, `MCPRoute`, backend-routing, and related policy resources;
+- public MCP capability exposure;
+- network boundaries;
+- runtime-level authentication and backend credential handling;
+- runtime-level telemetry;
+- deployment, validation, upgrade, and rollback procedures.
 
 Backend services retain authority over their own domain semantics, validation, data, persistence, and business logic.
 
 Executable Kubernetes configuration becomes authoritative after implementation.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-1. Architecture Decision
+## 1. Architecture Decision
 
-llm-runtime will use Envoy AI Gateway as the MCP ingress implementation.
+`llm-runtime` will use **Envoy AI Gateway** as the MCP ingress implementation.
 
-The runtime will not implement its own:
+The runtime will **not** implement its own:
 
-* MCP protocol server;
-* capability registry service;
-* backend router;
-* backend adapter framework;
-* session manager;
-* authentication framework;
-* MCP multiplexing layer;
-* administration API;
-* administration UI.
+- MCP protocol server;
+- capability registry service;
+- backend router;
+- backend adapter framework;
+- session manager;
+- authentication framework;
+- MCP multiplexing layer;
+- administration API;
+- administration UI.
 
-The architectural unit owned by llm-runtime is configuration around the selected gateway, not a new gateway codebase.
+The architectural unit owned by `llm-runtime` is configuration around the selected gateway, not a new gateway codebase.
 
 The primary MCP routing primitive is:
 
+```text
 MCPRoute
+```
 
 The required abstraction is:
 
+```text
 MCP Client
     -> Envoy AI Gateway
         -> explicitly configured MCP backend
+```
 
 Adding another backend means changing declarative gateway configuration and network policy.
 
-It does not mean adding another client-visible endpoint or writing another routing integration inside llm-runtime.
+It does not mean adding another client-visible endpoint or writing another routing integration inside `llm-runtime`.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-2. Purpose
+## 2. Purpose
 
 Consumers require one stable MCP ingress for tools and resources provided by independently owned services.
 
 Without a shared ingress, each consumer would need direct knowledge of:
 
-* backend service addresses;
-* backend namespaces;
-* backend ports;
-* backend credentials;
-* backend-specific network access;
-* backend lifecycle changes.
+- backend service addresses;
+- backend namespaces;
+- backend ports;
+- backend credentials;
+- backend-specific network access;
+- backend lifecycle changes.
 
-llm-runtime centralizes that infrastructure boundary.
+`llm-runtime` centralizes that infrastructure boundary.
 
 The MCP gateway exists to provide:
 
+```text
 stable ingress
 + explicit capability exposure
 + deterministic backend routing
 + infrastructure security controls
 + infrastructure observability
+```
 
 It does not own backend application meaning.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-3. High-Level Architecture
+## 3. High-Level Architecture
 
 Model inference and MCP capability access remain separate runtime planes.
 
+```mermaid
 flowchart LR
     C[Agent / MCP Client]
+
     L[LLM Gateway]
     M[Envoy AI Gateway<br/>MCPRoute]
+
     B1[Memory Steward]
     B2[Backend 2]
     BN[Backend N]
+
     C -->|Model inference| L
     C -->|MCP| M
+
     M --> B1
     M --> B2
     M --> BN
+```
 
-LLM Gateway owns model-provider access.
+`LLM Gateway` owns model-provider access.
 
-Envoy AI Gateway owns MCP ingress and transport routing.
+`Envoy AI Gateway` owns MCP ingress and transport routing.
 
 Backend services own their domain behavior.
 
@@ -157,14 +167,15 @@ The MCP gateway is not placed in the inference request path.
 
 The LLM gateway is not placed in the MCP request path.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-4. Ownership Boundary
+## 4. Ownership Boundary
 
-llm-runtime owns
+### `llm-runtime` owns
 
+```text
 Envoy AI Gateway deployment
 Gateway resources
 MCPRoute resources
@@ -176,9 +187,11 @@ runtime telemetry
 health and validation procedures
 version pinning
 upgrade and rollback
+```
 
-Backend services own
+### Backend services own
 
+```text
 domain semantics
 domain validation
 domain authorization below the gateway boundary
@@ -189,33 +202,39 @@ retrieval
 mutation semantics
 idempotency semantics
 backend-specific correctness
+```
 
-Consumers own
+### Consumers own
 
+```text
 when a capability is invoked
 workflow semantics
 agent policy
 application retry policy
 application fallback policy
 interpretation of returned data
+```
 
-Invariant: transport routing does not transfer domain authority to the gateway.
+**Invariant:** transport routing does not transfer domain authority to the gateway.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-5. Client Contract
+## 5. Client Contract
 
 An MCP client depends on:
 
+```text
 one MCP endpoint
 + MCP protocol compatibility
 + publicly exposed capability names
 + required client authentication when enabled
+```
 
 A client MUST NOT require knowledge of:
 
+```text
 backend Kubernetes Service names
 backend namespaces
 backend URLs
@@ -224,26 +243,31 @@ backend credentials
 Envoy Backend resources
 internal routing topology
 gateway controller topology
+```
 
 The stable client-facing relationship is:
 
+```text
 Client -> MCP Gateway
+```
 
 not:
 
+```text
 Client -> Memory Steward
 Client -> Backend 2
 Client -> Backend 3
+```
 
-Consumer-specific execution metadata such as project_id, run_id, objective_id, or agent_role MAY be transported when useful.
+Consumer-specific execution metadata such as `project_id`, `run_id`, `objective_id`, or `agent_role` MAY be transported when useful.
 
 Those fields are not universal MCP gateway identity requirements.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-6. Backend Model
+## 6. Backend Model
 
 A backend is an independently owned MCP capability provider reachable through Envoy AI Gateway.
 
@@ -251,13 +275,13 @@ Memory Steward is Backend #1.
 
 Future backends may include:
 
-* artifact services;
-* repository-analysis services;
-* infrastructure inspection services;
-* deterministic analysis services;
-* documentation services;
-* source-control integrations;
-* other explicitly approved MCP services.
+- artifact services;
+- repository-analysis services;
+- infrastructure inspection services;
+- deterministic analysis services;
+- documentation services;
+- source-control integrations;
+- other explicitly approved MCP services.
 
 Backend destinations are declared by runtime-owned configuration.
 
@@ -269,20 +293,21 @@ A newly reachable network destination does not become a publicly exposed MCP bac
 
 Backend addition requires deliberate configuration and validation.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-7. Capability Exposure
+## 7. Capability Exposure
 
-Public capability exposure is allowlist-based.
+Public capability exposure is **allowlist-based**.
 
 Every backend attached to the runtime MCP ingress MUST declare an explicit tool selection policy.
 
-A backend configuration without an explicit tool allowlist is invalid for llm-runtime.
+A backend configuration without an explicit tool allowlist is invalid for `llm-runtime`.
 
 The public contract is therefore:
 
+```text
 backend provides capabilities
         |
         v
@@ -290,50 +315,60 @@ MCPRoute explicitly selects capabilities
         |
         v
 client discovers selected capabilities only
+```
 
 Backend reachability and capability exposure are separate decisions.
 
 For example:
 
+```text
 Memory Steward backend provides:
     memory.retrieve_context
     memory.operation_b
     memory.operation_c
+
 Runtime MCP ingress exposes:
     memory.retrieve_context
+```
 
 The runtime MUST NOT treat backend discovery as authority to publish all backend tools.
 
 Capability filtering belongs in declarative Envoy configuration.
 
-It MUST NOT be duplicated in a custom llm-runtime registry service.
+It MUST NOT be duplicated in a custom `llm-runtime` registry service.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-8. Initial Backend — Memory Steward
+## 8. Initial Backend — Memory Steward
 
 The first MCP backend is Memory Steward.
 
 The initial public capability is:
 
+```text
 memory.retrieve_context
+```
 
 The request path is:
 
+```mermaid
 sequenceDiagram
     participant C as MCP Client
     participant G as Envoy AI Gateway
     participant S as Memory Steward
+
     C->>G: memory.retrieve_context(...)
     G->>G: Resolve allowed tool + backend
     G->>S: MCP request
     S-->>G: Structured retrieval result
     G-->>C: MCP result
+```
 
 Memory Steward remains responsible for:
 
+```text
 Reference Memory
 Dynamic Memory
 retrieval semantics
@@ -343,6 +378,7 @@ provenance
 admission
 Memory Steward validation
 storage
+```
 
 Envoy AI Gateway does not reproduce those behaviors.
 
@@ -354,24 +390,30 @@ The gateway may validate protocol and routing requirements.
 
 It MUST NOT independently reinterpret Memory Steward domain semantics.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-9. Network Boundary
+## 9. Network Boundary
 
 The intended network relationship is:
 
+```mermaid
 flowchart LR
     A[Consumer workload]
+
     G[Envoy AI Gateway]
+
     M[Memory Steward]
     B2[Backend 2]
     BN[Backend N]
+
     A --> G
+
     G --> M
     G --> B2
     G --> BN
+```
 
 Consumer workloads receive MCP access to the gateway.
 
@@ -379,10 +421,12 @@ They do not receive backend access merely because a backend has been registered.
 
 NetworkPolicy MUST restrict:
 
+```text
 approved consumers -> MCP ingress
 MCP data plane -> configured backends
 required DNS
 required telemetry paths
+```
 
 Adding Backend N should normally require changing gateway-side egress rather than every consumer workload.
 
@@ -394,20 +438,22 @@ Arbitrary dynamic destination resolution MUST NOT be enabled as a substitute for
 
 Public Internet exposure is not implied by this architecture.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-10. Authentication and Credentials
+## 10. Authentication and Credentials
 
 Authentication has two separate boundaries:
 
+```text
 Client -> MCP Gateway
 MCP Gateway -> Backend
+```
 
 These MUST NOT be conflated.
 
-Client authentication
+### Client authentication
 
 The first deployment MAY operate inside a trusted Kubernetes network boundary without production user authentication.
 
@@ -415,7 +461,7 @@ The architecture must preserve the ability to enforce client authentication at t
 
 Client authentication must not require redesigning backend services.
 
-Backend authentication
+### Backend authentication
 
 Backend credentials belong to the gateway/backend boundary.
 
@@ -425,22 +471,23 @@ Where backend authentication is required, credentials SHOULD be attached through
 
 Credentials MUST NOT be embedded into client configuration or public MCP discovery.
 
-Authorization
+### Authorization
 
 Network reachability alone does not imply unrestricted capability authority.
 
 Public capabilities remain bounded by the configured MCP exposure policy even before full identity-aware authorization is introduced.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-11. Observability
+## 11. Observability
 
 MCP traffic is part of runtime infrastructure and MUST be observable from the first deployment.
 
 Required signals include:
 
+```text
 request count
 success/failure count
 request duration
@@ -452,38 +499,44 @@ request/response sizes where available
 selected backend
 selected capability/tool
 gateway health
+```
 
 Distributed traces should cover:
 
+```text
 MCP Client
     -> Envoy AI Gateway
     -> Backend
     -> Envoy AI Gateway
     -> MCP Client
+```
 
 Trace context SHOULD propagate into a backend when supported.
 
 The MCP ingress should integrate with the existing runtime observability stack:
 
+```text
 Prometheus
 Grafana / OCO
 Tempo
 Loki where applicable
+```
 
 Exact metric names are implementation details and MUST be validated against the pinned Envoy AI Gateway release.
 
 The architecture does not create a second custom metrics implementation when upstream telemetry already provides the required signal.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-12. Deployment and Configuration
+## 12. Deployment and Configuration
 
 Envoy AI Gateway is deployed as a separately reconcilable runtime lifecycle.
 
-The llm-runtime repository owns:
+The `llm-runtime` repository owns:
 
+```text
 version pins
 Helm or manifest configuration
 Gateway configuration
@@ -493,6 +546,7 @@ security policy
 NetworkPolicy
 observability integration
 validation tooling
+```
 
 Configuration is declarative.
 
@@ -500,6 +554,7 @@ Changing public MCP capability exposure MUST NOT require rebuilding a custom gat
 
 The desired structure is conceptually:
 
+```text
 k8s/
   mcp/
     gateway/
@@ -508,18 +563,19 @@ k8s/
     policy/
     network/
     observability/
+```
 
 The exact file layout is an implementation decision.
 
 The selected Envoy AI Gateway and Envoy Gateway versions MUST be pinned.
 
-latest or otherwise floating production dependencies are not accepted Desired State.
+`latest` or otherwise floating production dependencies are not accepted Desired State.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-13. Validation and Acceptance
+## 13. Validation and Acceptance
 
 Deployment success is not equivalent to MCP acceptance.
 
@@ -530,9 +586,9 @@ At minimum, validation MUST establish:
 1. the MCP ingress is reachable from an approved consumer;
 2. the client can complete MCP initialization;
 3. capability discovery succeeds;
-4. memory.retrieve_context is exposed;
+4. `memory.retrieve_context` is exposed;
 5. non-allowlisted Memory Steward capabilities are not exposed;
-6. memory.retrieve_context reaches Memory Steward and returns a valid result;
+6. `memory.retrieve_context` reaches Memory Steward and returns a valid result;
 7. an unknown tool remains a failure;
 8. an unavailable Memory Steward backend remains a failure;
 9. direct consumer access to Memory Steward is not accidentally introduced by the MCP deployment;
@@ -542,16 +598,17 @@ At minimum, validation MUST establish:
 
 A ready Pod or accepted Kubernetes resource alone is insufficient.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-14. Failure Semantics
+## 14. Failure Semantics
 
 Gateway infrastructure failures remain failures.
 
 The runtime MUST preserve meaningful distinction between:
 
+```text
 unknown capability
 capability not exposed
 malformed MCP request
@@ -565,6 +622,7 @@ backend protocol failure
 backend application rejection
 invalid backend response
 gateway internal failure
+```
 
 The MCP gateway MUST NOT manufacture successful tool results when backend execution failed.
 
@@ -572,21 +630,23 @@ The gateway MUST NOT silently route a request to another backend unless such beh
 
 Error responses must not expose:
 
+```text
 backend credentials
 Kubernetes Secrets
 unrelated runtime configuration
 arbitrary environment variables
 unbounded stack traces
+```
 
 Backend business errors remain backend-owned.
 
 Transport and routing failures remain gateway-visible.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-15. Versioning and Upgrade Policy
+## 15. Versioning and Upgrade Policy
 
 Envoy AI Gateway, Envoy Gateway, CRDs, and the supported MCP protocol behavior are versioned runtime dependencies.
 
@@ -598,6 +658,7 @@ Before promotion, the implementation MUST rerun the MCP acceptance checks from s
 
 In particular, upgrades must verify:
 
+```text
 MCP initialization
 tools/list behavior
 tool filtering
@@ -607,6 +668,7 @@ backend authentication where used
 failure propagation
 telemetry
 NetworkPolicy behavior
+```
 
 MCP protocol compatibility MUST be tested against the actual runtime clients and backends.
 
@@ -614,14 +676,15 @@ The runtime MUST NOT infer compatibility solely from an upstream release number.
 
 Breaking upstream behavior requires explicit migration or rollback.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-16. Non-Goals
+## 16. Non-Goals
 
-llm-runtime will not build:
+`llm-runtime` will not build:
 
+```text
 a custom MCP gateway
 a custom MCP server framework
 a custom capability-registry service
@@ -636,6 +699,7 @@ a generic HTTP proxy
 a generic TCP proxy
 a generic shell execution gateway
 an unrestricted Kubernetes API proxy
+```
 
 The runtime also does not move backend business logic into Envoy configuration.
 
@@ -643,11 +707,11 @@ Envoy configuration determines exposure and transport policy.
 
 Backends determine domain behavior.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-17. Tradeoffs and Known Constraints
+## 17. Tradeoffs and Known Constraints
 
 Selecting Envoy AI Gateway removes a substantial custom implementation burden but introduces dependency on Envoy AI Gateway, Envoy Gateway, Gateway API resources, and their release compatibility.
 
@@ -663,87 +727,95 @@ Backend and MCP protocol compatibility can change independently. Version pinning
 
 Cross-namespace backend topology must not be assumed to work through arbitrary direct route references. Backend addressing must use a topology supported and tested by the pinned Envoy release.
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-18. Core Invariants
+## 18. Core Invariants
 
-18.1 One stable MCP ingress
+### 18.1 One stable MCP ingress
 
 Consumers integrate with the runtime MCP endpoint rather than every backend independently.
 
-18.2 Envoy is the implementation
+### 18.2 Envoy is the implementation
 
-llm-runtime configures Envoy AI Gateway.
+`llm-runtime` configures Envoy AI Gateway.
 
 It does not implement a competing MCP gateway.
 
-18.3 Explicit exposure only
+### 18.3 Explicit exposure only
 
 Every public backend capability is deliberately allowlisted.
 
-18.4 No arbitrary destinations
+### 18.4 No arbitrary destinations
 
 Clients cannot choose backend URLs, Services, namespaces, or network destinations.
 
-18.5 Backend semantics remain backend-owned
+### 18.5 Backend semantics remain backend-owned
 
 Routing infrastructure does not reproduce backend application logic.
 
-18.6 Backend credentials remain behind the gateway
+### 18.6 Backend credentials remain behind the gateway
 
 Clients do not receive backend credentials.
 
-18.7 Consumer-specific metadata remains optional
+### 18.7 Consumer-specific metadata remains optional
 
 RR execution concepts do not become universal MCP gateway fields.
 
-18.8 Observability is mandatory
+### 18.8 Observability is mandatory
 
 MCP routing must be visible through runtime telemetry.
 
-18.9 Failure remains failure
+### 18.9 Failure remains failure
 
 Gateway or backend failure is not converted into synthetic success.
 
-18.10 Backend growth does not change client ingress
+### 18.10 Backend growth does not change client ingress
 
 Adding Backend N means:
 
+```text
 deploy backend
     -> configure backend destination
     -> explicitly allow capabilities
     -> permit required gateway egress
     -> validate
+```
 
 It does not mean:
 
+```text
 modify every MCP client
     -> expose backend directly
     -> distribute backend credentials
+```
 
-18.11 The gateway remains infrastructure
+### 18.11 The gateway remains infrastructure
 
 Envoy AI Gateway owns:
 
+```text
 MCP ingress
 + capability exposure
 + routing
 + transport policy
 + infrastructure security
 + infrastructure telemetry
+```
 
 Backends own:
 
+```text
 domain semantics
 + domain validation
 + domain state
 + persistence
 + correctness
+```
 
-Back to top
+[Back to top](#top)
 
-⸻
+---
 
-END OF DOCUMENT
+**END OF DOCUMENT**
