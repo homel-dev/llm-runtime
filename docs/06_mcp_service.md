@@ -1,1208 +1,749 @@
-<a id="top" name="top"></a>
 
-# MCP Service — Unified MCP Gateway for LLM Runtime
 
-## Status
 
-**Status:** Proposed Architecture  
-**Scope:** `llm-runtime`  
-**Implementation priority:** MVP  
-**Primary purpose:** provide one stable MCP ingress through which MCP clients access explicitly exposed tools and resources backed by independent services.
 
----
+MCP Gateway — Envoy AI Gateway Integration
 
-## Table of Contents
+Controlled MCP ingress for shared runtime capabilities.
 
-1. [Purpose](#purpose)
-2. [Core Architectural Principles](#core-architectural-principles)
-3. [High-Level Architecture](#high-level-architecture)
-4. [Client Model](#client-model)
-5. [MCP Service Responsibilities](#mcp-service-responsibilities)
-6. [Backend Model](#backend-model)
-7. [Capability Registry](#capability-registry)
-8. [Routing and Backend Adapters](#routing-and-backend-adapters)
-9. [Capability Discovery](#capability-discovery)
-10. [Network Boundary](#network-boundary)
-11. [Authentication and Authorization — Deferred](#authentication-and-authorization)
-12. [Credentials and Credential Rotation — Deferred](#credentials-and-credential-rotation)
-13. [Request Lifecycle](#request-lifecycle)
-14. [Failure Semantics](#failure-semantics)
-15. [Limits and Isolation](#limits-and-isolation)
-16. [Observability](#observability)
-17. [Deployment Model](#deployment-model)
-18. [Configuration Model](#configuration-model)
-19. [Initial Backend: Memory Steward](#initial-backend-memory-steward)
-20. [MVP Scope](#mvp-scope)
-21. [Deferred Capabilities](#deferred-capabilities)
-22. [Non-Goals](#non-goals)
-23. [Core Invariants](#core-invariants)
+⸻
 
----
+Table of Contents
 
-<a id="purpose" name="purpose"></a>
+* 0. Status, Scope, and Authority
+* 1. Architecture Decision
+* 2. Purpose
+* 3. High-Level Architecture
+* 4. Ownership Boundary
+* 5. Client Contract
+* 6. Backend Model
+* 7. Capability Exposure
+* 8. Initial Backend — Memory Steward
+* 9. Network Boundary
+* 10. Authentication and Credentials
+* 11. Observability
+* 12. Deployment and Configuration
+* 13. Validation and Acceptance
+* 14. Failure Semantics
+* 15. Versioning and Upgrade Policy
+* 16. Non-Goals
+* 17. Tradeoffs and Known Constraints
+* 18. Core Invariants
 
-## 1. Purpose
+⸻
 
-`MCP Service` is a trusted service deployed in `llm-runtime`.
+0. Status, Scope, and Authority
 
-It provides the **single stable MCP ingress** for clients that need access to tools, resources, and other capabilities exposed through MCP.
+Status: APPROVED ARCHITECTURE — implementation pending.
 
-The service is generic.
+Scope: llm-runtime.
 
-It is **not RR-specific** and MUST NOT encode RR-specific assumptions into its core architecture.
+Selected implementation: Envoy AI Gateway using MCPRoute.
 
-RR agents are one consumer of MCP Service.
+This document defines how llm-runtime exposes MCP capabilities.
 
-Other current or future consumers may include:
+It does not define a custom MCP gateway implementation.
 
-- other agent runtimes;
-- operator agents;
-- automation workers;
-- development tools;
-- IDE integrations;
-- internal services acting as MCP clients.
+llm-runtime has authority over:
 
-MCP Service hides backend topology from clients.
+* deployment of the MCP ingress;
+* Envoy AI Gateway configuration owned by this repository;
+* Gateway, MCPRoute, backend-routing, and related policy resources;
+* public MCP capability exposure;
+* network boundaries;
+* runtime-level authentication and backend credential handling;
+* runtime-level telemetry;
+* deployment, validation, upgrade, and rollback procedures.
 
-A client interacts with MCP Service rather than establishing independent connections to every backend capability provider.
+Backend services retain authority over their own domain semantics, validation, data, persistence, and business logic.
 
-The basic abstraction is:
+Executable Kubernetes configuration becomes authoritative after implementation.
 
-```text
+Back to top
+
+⸻
+
+1. Architecture Decision
+
+llm-runtime will use Envoy AI Gateway as the MCP ingress implementation.
+
+The runtime will not implement its own:
+
+* MCP protocol server;
+* capability registry service;
+* backend router;
+* backend adapter framework;
+* session manager;
+* authentication framework;
+* MCP multiplexing layer;
+* administration API;
+* administration UI.
+
+The architectural unit owned by llm-runtime is configuration around the selected gateway, not a new gateway codebase.
+
+The primary MCP routing primitive is:
+
+MCPRoute
+
+The required abstraction is:
+
 MCP Client
-    -> MCP Service
-        -> Backend 1
-        -> Backend 2
-        -> Backend 3
-        -> Backend N
-```
+    -> Envoy AI Gateway
+        -> explicitly configured MCP backend
 
-Memory Steward is the first backend integration.
+Adding another backend means changing declarative gateway configuration and network policy.
 
-It is not a special architectural case and does not define the MCP Service design.
+It does not mean adding another client-visible endpoint or writing another routing integration inside llm-runtime.
 
-[Back to top](#top)
+Back to top
 
----
+⸻
 
-<a id="core-architectural-principles" name="core-architectural-principles"></a>
+2. Purpose
 
-## 2. Core Architectural Principles
+Consumers require one stable MCP ingress for tools and resources provided by independently owned services.
 
-### 2.1 Single MCP ingress
+Without a shared ingress, each consumer would need direct knowledge of:
 
-Clients use one MCP endpoint.
+* backend service addresses;
+* backend namespaces;
+* backend ports;
+* backend credentials;
+* backend-specific network access;
+* backend lifecycle changes.
 
-Individual backend service addresses are not part of the client-facing contract.
+llm-runtime centralizes that infrastructure boundary.
 
-### 2.2 Backend independence
+The MCP gateway exists to provide:
 
-Every backend remains independently implemented and independently owned.
+stable ingress
++ explicit capability exposure
++ deterministic backend routing
++ infrastructure security controls
++ infrastructure observability
 
-MCP Service routes capabilities to backends but does not absorb their business logic.
+It does not own backend application meaning.
 
-### 2.3 Generic core
+Back to top
 
-MCP Service core MUST NOT contain assumptions that all tools:
+⸻
 
-- belong to RR;
-- belong to Memory Steward;
-- require `project_id`;
-- require `run_id`;
-- use the same backend protocol;
-- use the same authentication method;
-- live in the same Kubernetes namespace.
+3. High-Level Architecture
 
-### 2.4 Explicit capability exposure
+Model inference and MCP capability access remain separate runtime planes.
 
-Only explicitly registered capabilities are exposed.
-
-A backend being reachable by MCP Service does not automatically expose everything that backend provides.
-
-### 2.5 Stable client contract
-
-Adding Backend N should not require changing the MCP endpoint used by existing clients.
-
-### 2.6 Controlled routing
-
-The client selects a public MCP capability.
-
-MCP Service selects the configured backend and backend operation.
-
-Clients MUST NOT provide arbitrary backend destinations.
-
-### 2.7 Backend credentials remain private
-
-Backend credentials belong to MCP Service or its backend adapters.
-
-They are not distributed to MCP clients.
-
-### 2.8 Observability from the beginning
-
-Every routed operation must be observable and attributable to a request.
-
-### 2.9 Security architecture without premature implementation
-
-Authentication, authorization, and credential rotation are required architectural concerns.
-
-Full production implementation is explicitly deferred from the MVP.
-
-The initial architecture MUST nevertheless provide clear insertion points for them.
-
-[Back to top](#top)
-
----
-
-<a id="high-level-architecture" name="high-level-architecture"></a>
-
-## 3. High-Level Architecture
-
-```mermaid
 flowchart LR
-    C1[MCP Client]
-    C2[RR Agent]
-    C3[Agent Runtime]
-    C4[Automation / Operator Client]
-
-    M[MCP Service]
-
+    C[Agent / MCP Client]
+    L[LLM Gateway]
+    M[Envoy AI Gateway<br/>MCPRoute]
     B1[Memory Steward]
     B2[Backend 2]
-    B3[Backend 3]
     BN[Backend N]
-
-    C1 -->|MCP| M
-    C2 -->|MCP| M
-    C3 -->|MCP| M
-    C4 -->|MCP| M
-
+    C -->|Model inference| L
+    C -->|MCP| M
     M --> B1
     M --> B2
-    M --> B3
     M --> BN
-```
 
-Within `llm-runtime`, model access and tool access are separate planes:
+LLM Gateway owns model-provider access.
 
-```mermaid
-flowchart LR
-    C[Agent / Client]
+Envoy AI Gateway owns MCP ingress and transport routing.
 
-    G[LLM Gateway]
-    M[MCP Service]
-
-    C -->|Model inference| G
-    C -->|Tools / Resources| M
-```
-
-`LLM Gateway` owns model inference access.
-
-`MCP Service` owns MCP capability access.
+Backend services own their domain behavior.
 
 These responsibilities MUST remain separate.
 
-[Back to top](#top)
+The MCP gateway is not placed in the inference request path.
 
----
+The LLM gateway is not placed in the MCP request path.
 
-<a id="client-model" name="client-model"></a>
+Back to top
 
-## 4. Client Model
+⸻
 
-An MCP client should only need to know:
+4. Ownership Boundary
 
-- MCP Service endpoint;
-- supported MCP transport;
-- MCP protocol contract;
-- capabilities returned through discovery;
-- authentication information when authentication is enabled.
+llm-runtime owns
 
-The client MUST NOT need to know:
+Envoy AI Gateway deployment
+Gateway resources
+MCPRoute resources
+backend routing configuration
+tool exposure policy
+gateway-facing NetworkPolicy
+backend credential attachment
+runtime telemetry
+health and validation procedures
+version pinning
+upgrade and rollback
 
-- backend Kubernetes Service names;
-- backend namespaces;
-- backend ports;
-- backend URLs;
-- backend credentials;
-- backend implementation languages;
-- internal adapter configuration;
-- internal routing topology.
+Backend services own
 
-Consumer-specific context MAY be associated with a connection or request.
+domain semantics
+domain validation
+domain authorization below the gateway boundary
+domain data
+persistence
+ranking
+retrieval
+mutation semantics
+idempotency semantics
+backend-specific correctness
 
-Examples include:
+Consumers own
 
-- project identity;
-- run identity;
-- objective identity;
-- agent role;
-- session identity;
-- tenant identity;
-- environment.
+when a capability is invoked
+workflow semantics
+agent policy
+application retry policy
+application fallback policy
+interpretation of returned data
 
-Such information is optional context.
+Invariant: transport routing does not transfer domain authority to the gateway.
 
-It is not part of the universal MCP Service identity model.
+Back to top
 
-For example, RR may provide:
+⸻
 
-- `run_id`;
-- `objective_id`;
-- `project_id`;
-- `agent_role`.
+5. Client Contract
 
-Another client may have none of those concepts.
+An MCP client depends on:
 
-MCP Service core MUST remain functional without RR-specific metadata.
+one MCP endpoint
++ MCP protocol compatibility
++ publicly exposed capability names
++ required client authentication when enabled
 
-[Back to top](#top)
+A client MUST NOT require knowledge of:
 
----
+backend Kubernetes Service names
+backend namespaces
+backend URLs
+backend ports
+backend credentials
+Envoy Backend resources
+internal routing topology
+gateway controller topology
 
-<a id="mcp-service-responsibilities" name="mcp-service-responsibilities"></a>
+The stable client-facing relationship is:
 
-## 5. MCP Service Responsibilities
+Client -> MCP Gateway
 
-MCP Service is responsible for:
+not:
 
-- exposing the MCP server endpoint;
-- MCP protocol handling;
-- capability discovery;
-- public tool registration;
-- public resource registration;
-- request schema validation;
-- capability resolution;
-- backend resolution;
-- backend dispatch;
-- protocol adaptation where required;
-- request timeout enforcement;
-- request-size enforcement;
-- response-size enforcement;
-- cancellation handling where supported;
-- backend error normalization;
-- structured logging;
-- metrics;
-- distributed tracing;
-- backend health reporting.
+Client -> Memory Steward
+Client -> Backend 2
+Client -> Backend 3
 
-MCP Service MUST NOT:
+Consumer-specific execution metadata such as project_id, run_id, objective_id, or agent_role MAY be transported when useful.
 
-- reproduce backend business logic;
-- implement Memory Steward retrieval semantics;
-- become an artifact database;
-- become a memory database;
-- become a generic HTTP proxy;
-- become a generic TCP proxy;
-- allow clients to provide arbitrary destination URLs;
-- automatically expose every operation offered by a backend.
+Those fields are not universal MCP gateway identity requirements.
 
-The service acts as a controlled capability gateway.
+Back to top
 
-[Back to top](#top)
+⸻
 
----
+6. Backend Model
 
-<a id="backend-model" name="backend-model"></a>
-
-## 6. Backend Model
-
-A backend is an independently implemented capability provider reachable by MCP Service.
-
-Examples may include:
-
-- Memory Steward;
-- artifact services;
-- repository-analysis services;
-- source-control integrations;
-- infrastructure inspection services;
-- documentation services;
-- deterministic analysis services;
-- other MCP servers.
-
-A backend may expose:
-
-- MCP;
-- HTTP;
-- another explicitly supported internal protocol.
-
-MCP Service provides a single client-facing MCP surface regardless of the backend transport.
-
-```mermaid
-flowchart TD
-    M[MCP Service]
-
-    A1[MCP Adapter]
-    A2[HTTP Adapter]
-    A3[Backend-Specific Adapter]
-
-    B1[Backend 1]
-    B2[Backend 2]
-    B3[Backend 3]
-
-    M --> A1
-    M --> A2
-    M --> A3
-
-    A1 --> B1
-    A2 --> B2
-    A3 --> B3
-```
-
-Backend #1 is Memory Steward.
-
-Backend #2 through Backend N must be addable without redesigning the agent-facing protocol.
-
-[Back to top](#top)
-
----
-
-<a id="capability-registry" name="capability-registry"></a>
-
-## 7. Capability Registry
-
-MCP Service maintains an explicit registry of public capabilities.
-
-A public capability may be:
-
-- an MCP tool;
-- an MCP resource;
-- another MCP capability type supported later.
-
-For each public capability, the registry should define at minimum:
-
-- public capability name;
-- capability type;
-- description;
-- input schema where applicable;
-- backend ID;
-- backend operation;
-- adapter type;
-- timeout;
-- maximum request size;
-- maximum response size;
-- read/write classification;
-- optional policy reference.
-
-Example:
-
-```yaml
-backends:
-  memory-steward:
-    adapter: mcp
-    endpoint: http://memory-steward-mcp.namespace.svc:8000
-
-tools:
-  memory.retrieve_context:
-    backend: memory-steward
-    operation: memory.retrieve_context
-    access: read
-    timeout: 60s
-```
-
-The registry is allowlist-based.
-
-The following unrestricted capability pattern MUST NOT be part of the default design:
-
-```text
-http.request(url, ...)
-proxy.request(destination, ...)
-tcp.connect(host, port)
-shell.exec(command)
-```
-
-Such capabilities would bypass explicit backend registration and routing policy.
-
-[Back to top](#top)
-
----
-
-<a id="routing-and-backend-adapters" name="routing-and-backend-adapters"></a>
-
-## 8. Routing and Backend Adapters
-
-Routing is deterministic.
-
-For every capability request:
-
-```text
-public capability
-    -> capability registry
-    -> backend ID
-    -> backend adapter
-    -> backend operation
-```
-
-The caller selects the public capability.
-
-The caller does not select:
-
-- backend URL;
-- backend Service;
-- namespace;
-- transport;
-- credentials.
-
-A backend adapter is responsible for transport and protocol adaptation.
-
-An adapter MAY:
-
-- transform request shape;
-- transform response shape;
-- attach backend authentication;
-- attach transport metadata;
-- apply backend-specific timeout;
-- normalize backend transport failures;
-- propagate tracing context.
-
-An adapter MUST NOT recreate backend domain logic.
-
-Example:
-
-```text
-memory.retrieve_context
-```
-
-is implemented by Memory Steward.
-
-MCP Service routes the call to Memory Steward.
-
-It does not independently implement Reference Memory filtering, ranking, retrieval, or admission semantics.
-
-[Back to top](#top)
-
----
-
-<a id="capability-discovery" name="capability-discovery"></a>
-
-## 9. Capability Discovery
-
-MCP Service owns the client-visible capability catalog.
-
-Clients perform discovery against MCP Service.
-
-They do not perform discovery against individual backends.
-
-Backend capabilities and publicly exposed capabilities are separate sets.
-
-For example:
-
-```text
-Backend exposes:
-    operation.a
-    operation.b
-    operation.c
-    operation.d
-
-MCP Service exposes:
-    operation.a
-    operation.c
-```
-
-Backend registration MUST NOT automatically publish every backend capability.
-
-Public exposure must be explicit.
-
-When authorization is implemented, discovery MAY additionally filter capabilities based on client policy.
-
-[Back to top](#top)
-
----
-
-<a id="network-boundary" name="network-boundary"></a>
-
-## 10. Network Boundary
-
-MCP clients should not require direct network access to individual backends.
-
-For RR agents, the intended runtime model is:
-
-```mermaid
-flowchart LR
-    A[RR Agent]
-
-    G[LLM Gateway]
-    M[MCP Service]
-
-    B1[Memory Steward]
-    B2[Backend 2]
-    BN[Backend N]
-
-    A --> G
-    A --> M
-
-    M --> B1
-    M --> B2
-    M --> BN
-```
-
-The important scaling property is:
-
-> Adding another MCP backend does not require adding that backend as a direct egress destination to every client workload.
-
-Instead:
-
-```text
-Client -> MCP Service -> Backend
-```
-
-MCP Service receives the backend egress required by its configured registry.
-
-Clients receive access to MCP Service.
-
-Public Internet access is not implied by this architecture.
-
-NetworkPolicy should be capability-driven and narrow:
-
-- client workloads -> MCP Service;
-- MCP Service -> configured backend services;
-- required cluster DNS;
-- required observability endpoints.
-
-[Back to top](#top)
-
----
-
-<a id="authentication-and-authorization" name="authentication-and-authorization"></a>
-
-## 11. Authentication and Authorization — Deferred
-
-Authentication and authorization are required architectural concerns.
-
-They are **not an MVP implementation priority**.
-
-The first deployment may operate inside a trusted cluster boundary without full production authentication and authorization.
-
-This is intentional.
-
-The architecture must preserve a clear future request pipeline:
-
-```text
-request
-    -> authentication
-    -> authorization
-    -> capability resolution
-    -> backend dispatch
-```
-
-Possible future authentication approaches include:
-
-- OAuth 2.1 / OIDC;
-- external Authorization Server / IdP;
-- Kubernetes workload identity;
-- mTLS client identity;
-- short-lived signed service tokens;
-- development-only static tokens.
-
-Possible future authorization approaches include:
-
-- OAuth scopes;
-- service/client roles;
-- declarative capability policy;
-- RBAC;
-- ABAC;
-- external policy engine.
-
-Possible authorization inputs include:
-
-- authenticated client identity;
-- requested capability;
-- read/write classification;
-- tenant context;
-- project context;
-- consumer-specific execution attributes;
-- backend-specific policy.
-
-No production authentication provider or authorization backend is selected by this document.
-
-For MVP, authorization MAY effectively be:
-
-```text
-trusted client with network access -> allowed registered capabilities
-```
-
-provided the implementation keeps the authorization interception point explicit.
-
-**Full authentication and authorization implementation is deferred.**
-
-[Back to top](#top)
-
----
-
-<a id="credentials-and-credential-rotation" name="credentials-and-credential-rotation"></a>
-
-## 12. Credentials and Credential Rotation — Deferred
-
-Client identity and backend credentials are separate concerns.
-
-Some backends may eventually require MCP Service to authenticate when dispatching requests.
-
-Possible backend credential mechanisms include:
-
-- workload identity;
-- mTLS certificates;
-- short-lived service tokens;
-- OAuth client credentials;
-- static API keys where unavoidable.
-
-Backend credentials belong to:
-
-```text
-MCP Service
-    or
-Backend Adapter
-```
-
-They do not belong to MCP clients.
-
-This allows backend credentials to be rotated independently of client configuration.
-
-Possible future credential storage and rotation mechanisms include:
-
-- Kubernetes Secrets;
-- external secret manager;
-- workload identity;
-- certificate automation;
-- short-lived token acquisition.
-
-Credential rotation automation is **not part of the MVP**.
-
-For the first backend integrations, the simplest trusted-cluster mechanism supported by the backend may be used.
-
-The architecture must preserve this invariant:
-
-> Backend credentials are owned by the MCP Service/backend boundary and are never exposed to clients.
-
-[Back to top](#top)
-
----
-
-<a id="request-lifecycle" name="request-lifecycle"></a>
-
-## 13. Request Lifecycle
-
-The MVP request path is:
-
-```mermaid
-sequenceDiagram
-    participant C as MCP Client
-    participant M as MCP Service
-    participant R as Capability Registry
-    participant A as Backend Adapter
-    participant B as Backend
-
-    C->>M: MCP capability request
-    M->>R: Resolve capability
-    R-->>M: Backend + operation + limits
-    M->>A: Dispatch normalized request
-    A->>B: Backend request
-    B-->>A: Backend response
-    A-->>M: Normalized result
-    M-->>C: MCP result
-```
-
-The future secured path becomes:
-
-```mermaid
-sequenceDiagram
-    participant C as MCP Client
-    participant M as MCP Service
-    participant P as Auth / Policy Layer
-    participant R as Capability Registry
-    participant B as Backend
-
-    C->>M: MCP request
-    M->>P: Authenticate / authorize
-
-    alt Allowed
-        P-->>M: Allow
-        M->>R: Resolve capability
-        R-->>M: Backend mapping
-        M->>B: Dispatch
-        B-->>M: Result
-        M-->>C: MCP result
-    else Denied
-        P-->>M: Deny
-        M-->>C: MCP authorization error
-    end
-```
-
-Security can therefore be introduced without changing backend ownership or the public capability model.
-
-[Back to top](#top)
-
----
-
-<a id="failure-semantics" name="failure-semantics"></a>
-
-## 14. Failure Semantics
-
-MCP Service must preserve meaningful failure classes.
-
-At minimum:
-
-- unknown capability;
-- malformed MCP request;
-- request schema violation;
-- backend not configured;
-- backend unavailable;
-- backend connection failure;
-- backend timeout;
-- backend rejected request;
-- invalid backend response;
-- request too large;
-- response too large;
-- internal MCP Service failure;
-- authentication failure when enabled;
-- authorization failure when enabled.
-
-A backend failure MUST remain a failure.
-
-MCP Service MUST NOT create a synthetic successful response when backend execution failed.
-
-Errors returned to clients should provide enough bounded diagnostic information for:
-
-- caller reasoning;
-- retry decisions;
-- automated repair where applicable;
-- operator diagnostics.
-
-Errors MUST NOT expose:
-
-- secrets;
-- credentials;
-- unrelated backend configuration;
-- arbitrary environment variables;
-- unrestricted stack dumps.
-
-[Back to top](#top)
-
----
-
-<a id="limits-and-isolation" name="limits-and-isolation"></a>
-
-## 15. Limits and Isolation
-
-MCP Service should enforce infrastructure-level limits.
-
-Per capability or backend, configuration may define:
-
-- request timeout;
-- maximum request size;
-- maximum response size;
-- maximum concurrent calls;
-- optional rate limit;
-- cancellation behavior;
-- retry policy.
-
-A backend should not be able to consume unbounded MCP Service capacity.
-
-Backend-specific failure or latency must remain isolated as much as practical.
-
-Automatic retries must be conservative.
-
-Mutating operations MUST NOT be automatically retried unless their backend contract explicitly guarantees safe idempotency.
-
-Read-only operations MAY use bounded retries when explicitly configured.
-
-[Back to top](#top)
-
----
-
-<a id="observability" name="observability"></a>
-
-## 16. Observability
-
-Observability is required from the MVP.
-
-Every MCP capability invocation should emit structured telemetry.
-
-Minimum fields should include:
-
-- request ID;
-- timestamp;
-- capability name;
-- capability type;
-- backend ID;
-- backend operation;
-- total duration;
-- backend duration;
-- result status;
-- error class;
-- request size;
-- response size;
-- timeout state.
-
-Where trusted consumer context exists, telemetry MAY additionally contain fields such as:
-
-- client identity;
-- project ID;
-- run ID;
-- objective ID;
-- agent role;
-- session ID;
-- tenant ID.
-
-These fields are optional extension metadata.
-
-They are not mandatory core MCP Service fields.
-
-Metrics should include:
-
-- request count;
-- request count by capability;
-- request count by backend;
-- success count;
-- failure count;
-- latency distributions;
-- active requests;
-- timeout count;
-- backend availability;
-- response-size distributions.
-
-Distributed tracing should cover the complete path:
-
-```text
-MCP Client
-    -> MCP Service
-    -> Backend Adapter
-    -> Backend
-    -> MCP Service
-    -> MCP Client
-```
-
-Trace context should propagate into backends that support it.
-
-MCP Service should integrate with the existing `llm-runtime` observability stack:
-
-- Prometheus;
-- Grafana;
-- Tempo;
-- Loki where applicable.
-
-[Back to top](#top)
-
----
-
-<a id="deployment-model" name="deployment-model"></a>
-
-## 17. Deployment Model
-
-MCP Service is an independent workload deployed in `llm-runtime`.
-
-Expected Kubernetes resources include:
-
-```text
-Deployment/mcp-service
-Service/mcp-service
-ConfigMap or equivalent configuration
-NetworkPolicy
-ServiceMonitor or PodMonitor
-Secret references when eventually required
-```
-
-MCP Service should remain stateless with respect to backend application data.
-
-Durable domain data remains owned by individual backends.
-
-MCP Service may maintain ephemeral state required by the protocol or runtime, such as:
-
-- active sessions;
-- connection state;
-- bounded caches;
-- backend health state;
-- transient routing state.
-
-The service must be restartable without loss of backend domain data.
-
-[Back to top](#top)
-
----
-
-<a id="configuration-model" name="configuration-model"></a>
-
-## 18. Configuration Model
-
-Configuration should be external to the application image.
-
-At minimum, configuration should eventually cover:
-
-- MCP listener settings;
-- backend registry;
-- capability registry;
-- backend endpoints;
-- adapter types;
-- timeout values;
-- request limits;
-- response limits;
-- concurrency limits;
-- health checks;
-- optional policy references;
-- optional credential references.
-
-Example conceptual configuration:
-
-```yaml
-backends:
-  memory-steward:
-    adapter: mcp
-    endpoint: http://memory-steward-mcp.namespace.svc:8000
-
-tools:
-  memory.retrieve_context:
-    backend: memory-steward
-    operation: memory.retrieve_context
-    timeout: 60s
-    max_request_bytes: 262144
-    max_response_bytes: 1048576
-```
-
-The exact configuration schema is an implementation decision and is not fixed by this architecture document.
-
-Configuration changes should not require rebuilding the MCP Service image.
-
-[Back to top](#top)
-
----
-
-<a id="initial-backend-memory-steward" name="initial-backend-memory-steward"></a>
-
-## 19. Initial Backend: Memory Steward
-
-Memory Steward is the first backend integrated with MCP Service.
-
-It is one backend among potentially many.
-
-The initial useful agent-facing operation is:
-
-```text
-memory.retrieve_context
-```
-
-Expected flow:
-
-```mermaid
-sequenceDiagram
-    participant C as MCP Client
-    participant M as MCP Service
-    participant S as Memory Steward
-
-    C->>M: memory.retrieve_context(...)
-    M->>M: Validate + resolve capability
-    M->>S: memory.retrieve_context(...)
-    S-->>M: Structured retrieval response
-    M-->>C: MCP result
-```
-
-Memory Steward remains responsible for its own semantics, including:
-
-- Reference Memory;
-- Dynamic Memory;
-- retrieval behavior;
-- metadata filtering;
-- ranking;
-- provenance;
-- admission;
-- Memory Steward-specific validation.
-
-MCP Service remains responsible for:
-
-- public capability exposure;
-- routing;
-- transport;
-- generic validation;
-- infrastructure limits;
-- observability;
-- future authentication and authorization enforcement.
-
-Memory Steward-specific retrieval logic MUST NOT be implemented in the MCP Service core.
-
-Future Memory Steward operations may be exposed through the same backend registration mechanism.
-
-[Back to top](#top)
-
----
-
-<a id="mvp-scope" name="mvp-scope"></a>
-
-## 20. MVP Scope
-
-The first implementation should remain deliberately bounded.
-
-MVP should include:
-
-1. deploy `mcp-service` in `llm-runtime`;
-2. expose one MCP endpoint;
-3. implement MCP capability discovery;
-4. implement backend registry;
-5. implement explicit capability registry;
-6. implement deterministic capability routing;
-7. implement backend adapter abstraction;
-8. integrate Memory Steward as Backend #1;
-9. expose `memory.retrieve_context`;
-10. implement request timeout enforcement;
-11. implement request-size limits;
-12. implement response-size limits;
-13. implement backend health handling;
-14. implement structured error responses;
-15. implement structured logs;
-16. implement Prometheus metrics;
-17. implement trace propagation;
-18. add required Kubernetes NetworkPolicies;
-19. add routing tests;
-20. add timeout tests;
-21. add malformed-request tests;
-22. add unavailable-backend tests;
-23. add capability-not-found tests.
-
-The following are explicitly **not required for MVP completion**:
-
-- production authentication;
-- production authorization;
-- external IdP integration;
-- credential rotation automation;
-- advanced RBAC or ABAC;
-- dynamic backend self-registration.
-
-[Back to top](#top)
-
----
-
-<a id="deferred-capabilities" name="deferred-capabilities"></a>
-
-## 21. Deferred Capabilities
-
-The following capabilities are intentionally deferred:
-
-- production authentication;
-- production authorization;
-- OAuth/OIDC integration;
-- workload identity integration;
-- RBAC;
-- ABAC;
-- external authorization policy engine;
-- automated credential rotation;
-- dynamic backend registration;
-- dynamic capability publication;
-- administrative UI;
-- public MCP federation;
-- external arbitrary MCP server federation;
-- multi-tenant policy;
-- per-client quotas;
-- advanced retry orchestration;
-- destructive-operation approval workflows.
-
-The architecture should permit these features to be added later without replacing the core MCP routing model.
-
-[Back to top](#top)
-
----
-
-<a id="non-goals" name="non-goals"></a>
-
-## 22. Non-Goals
-
-MCP Service is NOT:
-
-- an LLM gateway;
-- an RR-specific service;
-- a Memory Steward replacement;
-- a memory database;
-- an artifact database;
-- a generic HTTP proxy;
-- a generic TCP proxy;
-- a generic shell execution gateway;
-- an unrestricted Kubernetes API proxy;
-- a place to duplicate backend application logic;
-- a mechanism that automatically exposes every backend operation.
-
-Its responsibility is:
-
-> Provide one controlled MCP ingress and route explicitly registered MCP capabilities to independently owned backend services.
-
-[Back to top](#top)
-
----
-
-<a id="core-invariants" name="core-invariants"></a>
-
-## 23. Core Invariants
-
-### 23.1 One stable MCP ingress
-
-Clients connect to MCP Service rather than individually integrating with every backend.
-
-### 23.2 Backend independence
+A backend is an independently owned MCP capability provider reachable through Envoy AI Gateway.
 
 Memory Steward is Backend #1.
 
-It does not define MCP Service semantics and does not constrain future backends.
+Future backends may include:
 
-### 23.3 Explicit exposure
+* artifact services;
+* repository-analysis services;
+* infrastructure inspection services;
+* deterministic analysis services;
+* documentation services;
+* source-control integrations;
+* other explicitly approved MCP services.
 
-Only explicitly registered tools and resources are publicly exposed.
+Backend destinations are declared by runtime-owned configuration.
 
-### 23.4 No arbitrary backend destinations
+Clients MUST NOT supply arbitrary backend destinations.
 
-Clients cannot provide arbitrary backend URLs or addresses.
+Dynamic forward-proxy behavior is outside this architecture.
 
-### 23.5 No duplicated backend semantics
+A newly reachable network destination does not become a publicly exposed MCP backend automatically.
 
-Application business logic remains backend-owned.
+Backend addition requires deliberate configuration and validation.
 
-### 23.6 Backend credentials remain behind MCP Service
+Back to top
 
-Backend credentials are never distributed to MCP clients.
+⸻
 
-### 23.7 Consumer-specific metadata remains optional
+7. Capability Exposure
 
-RR execution concepts do not become mandatory fields in the generic MCP Service contract.
+Public capability exposure is allowlist-based.
 
-### 23.8 Observability is mandatory
+Every backend attached to the runtime MCP ingress MUST declare an explicit tool selection policy.
 
-Every routed capability invocation must be observable.
+A backend configuration without an explicit tool allowlist is invalid for llm-runtime.
 
-### 23.9 Security is architecturally reserved but implementation is deferred
+The public contract is therefore:
 
-Authentication, authorization, and credential rotation have explicit extension points but are not MVP priorities.
+backend provides capabilities
+        |
+        v
+MCPRoute explicitly selects capabilities
+        |
+        v
+client discovers selected capabilities only
 
-### 23.10 Backend growth does not change client ingress
+Backend reachability and capability exposure are separate decisions.
+
+For example:
+
+Memory Steward backend provides:
+    memory.retrieve_context
+    memory.operation_b
+    memory.operation_c
+Runtime MCP ingress exposes:
+    memory.retrieve_context
+
+The runtime MUST NOT treat backend discovery as authority to publish all backend tools.
+
+Capability filtering belongs in declarative Envoy configuration.
+
+It MUST NOT be duplicated in a custom llm-runtime registry service.
+
+Back to top
+
+⸻
+
+8. Initial Backend — Memory Steward
+
+The first MCP backend is Memory Steward.
+
+The initial public capability is:
+
+memory.retrieve_context
+
+The request path is:
+
+sequenceDiagram
+    participant C as MCP Client
+    participant G as Envoy AI Gateway
+    participant S as Memory Steward
+    C->>G: memory.retrieve_context(...)
+    G->>G: Resolve allowed tool + backend
+    G->>S: MCP request
+    S-->>G: Structured retrieval result
+    G-->>C: MCP result
+
+Memory Steward remains responsible for:
+
+Reference Memory
+Dynamic Memory
+retrieval semantics
+metadata filtering
+ranking
+provenance
+admission
+Memory Steward validation
+storage
+
+Envoy AI Gateway does not reproduce those behaviors.
+
+For example, a future change to Reference Memory filtering requires a Memory Steward change.
+
+It does not require implementing the filtering logic in the gateway.
+
+The gateway may validate protocol and routing requirements.
+
+It MUST NOT independently reinterpret Memory Steward domain semantics.
+
+Back to top
+
+⸻
+
+9. Network Boundary
+
+The intended network relationship is:
+
+flowchart LR
+    A[Consumer workload]
+    G[Envoy AI Gateway]
+    M[Memory Steward]
+    B2[Backend 2]
+    BN[Backend N]
+    A --> G
+    G --> M
+    G --> B2
+    G --> BN
+
+Consumer workloads receive MCP access to the gateway.
+
+They do not receive backend access merely because a backend has been registered.
+
+NetworkPolicy MUST restrict:
+
+approved consumers -> MCP ingress
+MCP data plane -> configured backends
+required DNS
+required telemetry paths
+
+Adding Backend N should normally require changing gateway-side egress rather than every consumer workload.
+
+Backend references and gateway-owned routing objects SHOULD remain local to the gateway configuration namespace.
+
+Where the actual backend workload lives in another namespace, runtime configuration may represent that destination through an explicitly configured Envoy backend using the backend service FQDN.
+
+Arbitrary dynamic destination resolution MUST NOT be enabled as a substitute for explicit backend registration.
+
+Public Internet exposure is not implied by this architecture.
+
+Back to top
+
+⸻
+
+10. Authentication and Credentials
+
+Authentication has two separate boundaries:
+
+Client -> MCP Gateway
+MCP Gateway -> Backend
+
+These MUST NOT be conflated.
+
+Client authentication
+
+The first deployment MAY operate inside a trusted Kubernetes network boundary without production user authentication.
+
+The architecture must preserve the ability to enforce client authentication at the gateway later.
+
+Client authentication must not require redesigning backend services.
+
+Backend authentication
+
+Backend credentials belong to the gateway/backend boundary.
+
+They MUST NOT be distributed to MCP clients.
+
+Where backend authentication is required, credentials SHOULD be attached through supported gateway security policy and Kubernetes Secret mechanisms.
+
+Credentials MUST NOT be embedded into client configuration or public MCP discovery.
+
+Authorization
+
+Network reachability alone does not imply unrestricted capability authority.
+
+Public capabilities remain bounded by the configured MCP exposure policy even before full identity-aware authorization is introduced.
+
+Back to top
+
+⸻
+
+11. Observability
+
+MCP traffic is part of runtime infrastructure and MUST be observable from the first deployment.
+
+Required signals include:
+
+request count
+success/failure count
+request duration
+backend duration where available
+active requests
+backend failures
+timeouts
+request/response sizes where available
+selected backend
+selected capability/tool
+gateway health
+
+Distributed traces should cover:
+
+MCP Client
+    -> Envoy AI Gateway
+    -> Backend
+    -> Envoy AI Gateway
+    -> MCP Client
+
+Trace context SHOULD propagate into a backend when supported.
+
+The MCP ingress should integrate with the existing runtime observability stack:
+
+Prometheus
+Grafana / OCO
+Tempo
+Loki where applicable
+
+Exact metric names are implementation details and MUST be validated against the pinned Envoy AI Gateway release.
+
+The architecture does not create a second custom metrics implementation when upstream telemetry already provides the required signal.
+
+Back to top
+
+⸻
+
+12. Deployment and Configuration
+
+Envoy AI Gateway is deployed as a separately reconcilable runtime lifecycle.
+
+The llm-runtime repository owns:
+
+version pins
+Helm or manifest configuration
+Gateway configuration
+MCPRoute resources
+Backend resources where required
+security policy
+NetworkPolicy
+observability integration
+validation tooling
+
+Configuration is declarative.
+
+Changing public MCP capability exposure MUST NOT require rebuilding a custom gateway image.
+
+The desired structure is conceptually:
+
+k8s/
+  mcp/
+    gateway/
+    routes/
+    backends/
+    policy/
+    network/
+    observability/
+
+The exact file layout is an implementation decision.
+
+The selected Envoy AI Gateway and Envoy Gateway versions MUST be pinned.
+
+latest or otherwise floating production dependencies are not accepted Desired State.
+
+Back to top
+
+⸻
+
+13. Validation and Acceptance
+
+Deployment success is not equivalent to MCP acceptance.
+
+The implementation is accepted only when end-to-end validation proves the intended contract.
+
+At minimum, validation MUST establish:
+
+1. the MCP ingress is reachable from an approved consumer;
+2. the client can complete MCP initialization;
+3. capability discovery succeeds;
+4. memory.retrieve_context is exposed;
+5. non-allowlisted Memory Steward capabilities are not exposed;
+6. memory.retrieve_context reaches Memory Steward and returns a valid result;
+7. an unknown tool remains a failure;
+8. an unavailable Memory Steward backend remains a failure;
+9. direct consumer access to Memory Steward is not accidentally introduced by the MCP deployment;
+10. required gateway telemetry is visible;
+11. required trace propagation works where configured;
+12. NetworkPolicy permits required paths and rejects unintended paths.
+
+A ready Pod or accepted Kubernetes resource alone is insufficient.
+
+Back to top
+
+⸻
+
+14. Failure Semantics
+
+Gateway infrastructure failures remain failures.
+
+The runtime MUST preserve meaningful distinction between:
+
+unknown capability
+capability not exposed
+malformed MCP request
+client authentication failure
+client authorization failure
+gateway routing failure
+backend unavailable
+backend connection failure
+backend timeout
+backend protocol failure
+backend application rejection
+invalid backend response
+gateway internal failure
+
+The MCP gateway MUST NOT manufacture successful tool results when backend execution failed.
+
+The gateway MUST NOT silently route a request to another backend unless such behavior is explicitly part of the configured public contract.
+
+Error responses must not expose:
+
+backend credentials
+Kubernetes Secrets
+unrelated runtime configuration
+arbitrary environment variables
+unbounded stack traces
+
+Backend business errors remain backend-owned.
+
+Transport and routing failures remain gateway-visible.
+
+Back to top
+
+⸻
+
+15. Versioning and Upgrade Policy
+
+Envoy AI Gateway, Envoy Gateway, CRDs, and the supported MCP protocol behavior are versioned runtime dependencies.
+
+The repository MUST pin the selected versions.
+
+An upgrade is not accepted from controller readiness alone.
+
+Before promotion, the implementation MUST rerun the MCP acceptance checks from section 13.
+
+In particular, upgrades must verify:
+
+MCP initialization
+tools/list behavior
+tool filtering
+tool invocation
+backend routing
+backend authentication where used
+failure propagation
+telemetry
+NetworkPolicy behavior
+
+MCP protocol compatibility MUST be tested against the actual runtime clients and backends.
+
+The runtime MUST NOT infer compatibility solely from an upstream release number.
+
+Breaking upstream behavior requires explicit migration or rollback.
+
+Back to top
+
+⸻
+
+16. Non-Goals
+
+llm-runtime will not build:
+
+a custom MCP gateway
+a custom MCP server framework
+a custom capability-registry service
+a custom backend adapter framework
+a custom MCP session implementation
+a custom MCP authorization framework
+an MCP administration UI
+an MCP database
+a memory database
+an artifact database
+a generic HTTP proxy
+a generic TCP proxy
+a generic shell execution gateway
+an unrestricted Kubernetes API proxy
+
+The runtime also does not move backend business logic into Envoy configuration.
+
+Envoy configuration determines exposure and transport policy.
+
+Backends determine domain behavior.
+
+Back to top
+
+⸻
+
+17. Tradeoffs and Known Constraints
+
+Selecting Envoy AI Gateway removes a substantial custom implementation burden but introduces dependency on Envoy AI Gateway, Envoy Gateway, Gateway API resources, and their release compatibility.
+
+Declarative CRDs make runtime behavior reviewable and GitOps-friendly, but they couple the deployment to upstream API semantics.
+
+Explicit tool allowlisting creates operational work when backend capabilities change. That cost is intentional. New backend functionality should not become public accidentally.
+
+Centralizing MCP ingress creates a shared dependency. Gateway failure can affect multiple MCP consumers even when individual backends remain healthy.
+
+The gateway can enforce transport, exposure, identity, and infrastructure policy. It cannot determine whether a backend result is semantically correct.
+
+Backend and MCP protocol compatibility can change independently. Version pinning and end-to-end tests are therefore required even when Kubernetes reconciliation succeeds.
+
+Cross-namespace backend topology must not be assumed to work through arbitrary direct route references. Backend addressing must use a topology supported and tested by the pinned Envoy release.
+
+Back to top
+
+⸻
+
+18. Core Invariants
+
+18.1 One stable MCP ingress
+
+Consumers integrate with the runtime MCP endpoint rather than every backend independently.
+
+18.2 Envoy is the implementation
+
+llm-runtime configures Envoy AI Gateway.
+
+It does not implement a competing MCP gateway.
+
+18.3 Explicit exposure only
+
+Every public backend capability is deliberately allowlisted.
+
+18.4 No arbitrary destinations
+
+Clients cannot choose backend URLs, Services, namespaces, or network destinations.
+
+18.5 Backend semantics remain backend-owned
+
+Routing infrastructure does not reproduce backend application logic.
+
+18.6 Backend credentials remain behind the gateway
+
+Clients do not receive backend credentials.
+
+18.7 Consumer-specific metadata remains optional
+
+RR execution concepts do not become universal MCP gateway fields.
+
+18.8 Observability is mandatory
+
+MCP routing must be visible through runtime telemetry.
+
+18.9 Failure remains failure
+
+Gateway or backend failure is not converted into synthetic success.
+
+18.10 Backend growth does not change client ingress
 
 Adding Backend N means:
 
-```text
-deploy/register backend
-    -> register selected capabilities
-    -> configure routing
-```
+deploy backend
+    -> configure backend destination
+    -> explicitly allow capabilities
+    -> permit required gateway egress
+    -> validate
 
 It does not mean:
 
-```text
 modify every MCP client
-    -> expose new backend endpoint
-    -> distribute new backend credentials
-```
+    -> expose backend directly
+    -> distribute backend credentials
 
-### 23.11 MCP Service remains a gateway, not a monolith
+18.11 The gateway remains infrastructure
 
-The service owns:
+Envoy AI Gateway owns:
 
-```text
 MCP ingress
 + capability exposure
 + routing
-+ transport adaptation
-+ infrastructure limits
-+ observability
-```
++ transport policy
++ infrastructure security
++ infrastructure telemetry
 
 Backends own:
 
-```text
 domain semantics
 + domain validation
-+ domain data
-+ backend-specific business logic
-```
++ domain state
++ persistence
++ correctness
 
-[Back to top](#top)
+Back to top
+
+⸻
+
+END OF DOCUMENT
