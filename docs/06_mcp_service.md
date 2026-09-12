@@ -32,7 +32,7 @@
 
 ## 0. Status, Scope, and Authority
 
-**Status:** APPROVED ARCHITECTURE — implementation pending.
+**Status:** IMPLEMENTED.
 
 **Scope:** `llm-runtime`.
 
@@ -345,11 +345,13 @@ It MUST NOT be duplicated in a custom `llm-runtime` registry service.
 
 The first MCP backend is Memory Steward.
 
-The initial public capability is:
+The initial backend capability is:
 
 ```text
 memory.retrieve_context
 ```
+
+The exact public multiplexed tool name is discovered from `tools/list` and validated by `scripts/mcp-check.sh`; clients must not guess the gateway-added backend prefix.
 
 The request path is:
 

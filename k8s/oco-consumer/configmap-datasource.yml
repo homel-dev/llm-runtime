@@ -17,3 +17,15 @@ data:
         url: http://prometheus.llm-runtime.svc.cluster.local:9090
         isDefault: false
         editable: false
+      - name: llm-runtime-tempo
+        uid: llm-runtime-tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.llm-runtime.svc.cluster.local:3200
+        editable: false
+      - name: llm-runtime-loki
+        uid: llm-runtime-loki
+        type: loki
+        access: proxy
+        url: http://loki.llm-runtime.svc.cluster.local:3100
+        editable: false

@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-llm-runtime-mcp-gateway
+  namespace: ms
+  labels:
+    app.kubernetes.io/name: allow-llm-runtime-mcp-gateway
+    app.kubernetes.io/part-of: llm-runtime
+spec:
+  podSelector:
+    matchLabels:
+      app: memory-steward-mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              gateway.envoyproxy.io/owning-gateway-namespace: llm-runtime
+              gateway.envoyproxy.io/owning-gateway-name: llm-runtime-mcp
+      ports:
+        - protocol: TCP
+          port: 8081

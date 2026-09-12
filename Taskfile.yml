@@ -7,6 +7,11 @@ vars:
   MINIKUBE_PROFILE:
     sh: printf '%s' "${MINIKUBE_PROFILE:-minikube}"
 
+includes:
+  mcp:
+    taskfile: ./taskfiles/mcp.yml
+    dir: .
+
 tasks:
 
   default:

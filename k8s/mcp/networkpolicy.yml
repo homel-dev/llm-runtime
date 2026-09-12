@@ -1,0 +1,77 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: llm-runtime-mcp
+  namespace: envoy-gateway-system
+  labels:
+    app.kubernetes.io/name: llm-runtime-mcp
+    app.kubernetes.io/part-of: llm-runtime
+spec:
+  podSelector:
+    matchLabels:
+      gateway.envoyproxy.io/owning-gateway-namespace: llm-runtime
+      gateway.envoyproxy.io/owning-gateway-name: llm-runtime-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rr
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rr-pi-agent
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-runtime
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-operator-check
+      ports:
+        - protocol: TCP
+          port: 8000
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-runtime
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 19001
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ms
+          podSelector:
+            matchLabels:
+              app: memory-steward-mcp
+      ports:
+        - protocol: TCP
+          port: 8081
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-runtime
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4317

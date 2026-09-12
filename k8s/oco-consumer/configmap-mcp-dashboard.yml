@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-runtime-mcp-dashboard
+  namespace: llm-runtime
+  labels:
+    grafana_dashboard: "1"
+data:
+  llm-runtime-mcp.json: |
+    {
+      "uid": "llm-runtime-mcp",
+      "title": "LLM Runtime \u00b7 MCP Gateway",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "MCP Gateway",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 3
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "max(up{job=\"mcp-envoy\"}) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "graphMode": "area",
+            "colorMode": "value",
+            "textMode": "value",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "values": false
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "HTTP request rate",
+          "gridPos": {
+            "x": 0,
+            "y": 3,
+            "w": 12,
+            "h": 7
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(envoy_http_downstream_rq_total{job=\"mcp-envoy\"}[5m]))",
+              "refId": "A",
+              "legendFormat": "requests/s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            }
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "Upstream latency p95",
+          "gridPos": {
+            "x": 12,
+            "y": 3,
+            "w": 12,
+            "h": 7
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "llm-runtime-prometheus"
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(envoy_cluster_upstream_rq_time_bucket{job=\"mcp-envoy\"}[5m]))) / 1000",
+              "refId": "A",
+              "legendFormat": "p95"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s"
+            }
+          }
+        },
+        {
+          "type": "logs",
+          "title": "MCP access logs",
+          "gridPos": {
+            "x": 0,
+            "y": 10,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "llm-runtime-loki"
+          },
+          "targets": [
+            {
+              "expr": "{service_name=\"llm-runtime-mcp\"}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "traces",
+          "title": "MCP traces",
+          "gridPos": {
+            "x": 12,
+            "y": 10,
+            "w": 12,
+            "h": 8
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "llm-runtime-tempo"
+          },
+          "targets": [
+            {
+              "queryType": "traceql",
+              "query": "{ resource.service.name = `llm-runtime-mcp` }",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }
