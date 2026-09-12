@@ -280,6 +280,21 @@ function changedTopKeys(a: JsonRecord, b: JsonRecord): string[] {
   return [...keys].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
 }
 
+function itemFieldDiff(clientItem: unknown, storedItem: unknown): JsonRecord {
+  const a = normalizeReplayItem(clientItem);
+  const b = normalizeReplayItem(storedItem);
+  const ao = a && typeof a === "object" && !Array.isArray(a) ? (a as JsonRecord) : {};
+  const bo = b && typeof b === "object" && !Array.isArray(b) ? (b as JsonRecord) : {};
+  const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+  const diff: JsonRecord = {};
+  for (const k of keys) {
+    const av = JSON.stringify(ao[k]);
+    const bv = JSON.stringify(bo[k]);
+    if (av !== bv) diff[k] = { client: (av ?? "undefined").slice(0, 120), stored: (bv ?? "undefined").slice(0, 120) };
+  }
+  return diff;
+}
+
 export function buildContinuationRequest(
   fullBody: JsonRecord,
   continuation: CodexContinuation | undefined,
@@ -304,7 +319,7 @@ export function buildContinuationRequest(
   }
   for (let i = 0; i < continuation.lastResponseItems.length; i++) {
     if (!replayItemsEqual(current[previous.length + i], continuation.lastResponseItems[i])) {
-      return { body: fullBody, usedContinuation: false, missReason: "response_item_mismatch", missDetail: { index: i, storedType: itemType(continuation.lastResponseItems[i]), clientType: itemType(current[previous.length + i]) } };
+      return { body: fullBody, usedContinuation: false, missReason: "response_item_mismatch", missDetail: { index: i, storedType: itemType(continuation.lastResponseItems[i]), clientType: itemType(current[previous.length + i]), diffKeys: itemFieldDiff(current[previous.length + i], continuation.lastResponseItems[i]) } };
     }
   }
   return {
