@@ -63,6 +63,9 @@ spec:
             - --enforce-eager
             - --no-async-scheduling
             - --structured-outputs-config.backend
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - hermes
             - xgrammar
 
           env:
