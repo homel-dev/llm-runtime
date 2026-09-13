@@ -6,6 +6,7 @@ gateway_url="${MCP_GATEWAY_URL:-http://llm-runtime-mcp.llm-runtime.svc.cluster.l
 protocol="${MCP_PROTOCOL_VERSION:-2025-06-18}"
 project_id="${PROJECT_ID:-}"
 query="${QUERY:-}"
+reference_chunk_id="${REFERENCE_CHUNK_ID:-}"
 
 name="mcp-check-$(date +%s)-$RANDOM"
 
@@ -27,6 +28,7 @@ kubectl -n "${namespace}" exec "${name}" -- sh -eu -c '
   protocol="$2"
   project_id="$3"
   query="$4"
+  reference_chunk_id="$5"
 
   init_body=/tmp/init.body
   init_headers=/tmp/init.headers
@@ -61,20 +63,57 @@ kubectl -n "${namespace}" exec "${name}" -- sh -eu -c '
   cat /tmp/tools.out
   echo
 
-  tool="$(sed -n "s/.*\"name\"[[:space:]]*:[[:space:]]*\"\([^\"]*memory\.retrieve_context[^\"]*\)\".*/\1/p" /tmp/tools.out | head -n1)"
-  test -n "$tool" || { echo "memory.retrieve_context not visible through gateway" >&2; exit 1; }
+  retrieve_tool="$(sed -n "s/.*\"name\"[[:space:]]*:[[:space:]]*\"\([^\"]*memory\.retrieve_context[^\"]*\)\".*/\1/p" /tmp/tools.out | head -n1)"
+  reference_search_tool="$(sed -n "s/.*\"name\"[[:space:]]*:[[:space:]]*\"\([^\"]*memory\.reference\.search[^\"]*\)\".*/\1/p" /tmp/tools.out | head -n1)"
+  reference_get_tool="$(sed -n "s/.*\"name\"[[:space:]]*:[[:space:]]*\"\([^\"]*memory\.reference\.get[^\"]*\)\".*/\1/p" /tmp/tools.out | head -n1)"
 
-  echo "public retrieval tool: $tool"
+  test -n "$retrieve_tool" || { echo "memory.retrieve_context not visible through gateway" >&2; exit 1; }
+  test -n "$reference_search_tool" || { echo "memory.reference.search not visible through gateway" >&2; exit 1; }
+  test -n "$reference_get_tool" || { echo "memory.reference.get not visible through gateway" >&2; exit 1; }
+
+  echo "public retrieval tool: $retrieve_tool"
+  echo "public reference search tool: $reference_search_tool"
+  echo "public reference get tool: $reference_get_tool"
 
   if [ -n "$project_id" ] && [ -n "$query" ]; then
     payload="$(printf "%s" "$query" | sed "s/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g")"
-    echo "=== tools/call $tool ==="
+    echo "=== tools/call $retrieve_tool ==="
     curl -sS \
       -X POST "$url" \
       -H "Content-Type: application/json" \
       -H "Accept: application/json, text/event-stream" \
       -H "Mcp-Session-Id: $session" \
-      --data "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"${tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"query\":\"${payload}\"}}}"
+      --data "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"${retrieve_tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"query\":\"${payload}\"}}}"
     echo
+
+    echo "=== tools/call $reference_search_tool ==="
+    curl -sS -o /tmp/reference-search.out \
+      -X POST "$url" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -H "Mcp-Session-Id: $session" \
+      --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"${reference_search_tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"query\":\"${payload}\"}}}"
+    cat /tmp/reference-search.out
+    echo
+    if grep -Eq '\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:' /tmp/reference-search.out; then
+      echo "memory.reference.search returned an MCP error" >&2
+      exit 1
+    fi
   fi
-' sh "${gateway_url}" "${protocol}" "${project_id}" "${query}"
+
+  if [ -n "$project_id" ] && [ -n "$reference_chunk_id" ]; then
+    echo "=== tools/call $reference_get_tool ==="
+    curl -sS -o /tmp/reference-get.out \
+      -X POST "$url" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -H "Mcp-Session-Id: $session" \
+      --data "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"${reference_get_tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"chunk_id\":\"${reference_chunk_id}\"}}}"
+    cat /tmp/reference-get.out
+    echo
+    if grep -Eq '\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:' /tmp/reference-get.out; then
+      echo "memory.reference.get returned an MCP error" >&2
+      exit 1
+    fi
+  fi
+' sh "${gateway_url}" "${protocol}" "${project_id}" "${query}" "${reference_chunk_id}"

@@ -158,3 +158,5 @@ spec:
       toolSelector:
         includeRegex:
           - '^memory\.retrieve_context$'
+          - '^memory\.reference\.search$'
+          - '^memory\.reference\.get$'
