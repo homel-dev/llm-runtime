@@ -24,6 +24,9 @@ export interface CodexTransportConfig {
   wsMaxBodyBytes: number;
   requestTimeoutMs: number;
   websocketConnectTimeoutMs: number;
+  websocketFirstEventTimeoutMs?: number;
+  websocketIdleTimeoutMs?: number;
+  sseTimeoutMs?: number;
   sessionIdleMs: number;
   sessionMaxAgeMs: number;
   debug: boolean;
@@ -136,9 +139,12 @@ export function loadCodexTransportConfigFromEnv(env: NodeJS.ProcessEnv = process
     authFile: env.CODEX_TRANSPORT_AUTH_FILE ?? "/auth/auth.json",
     models: csv(env.CODEX_TRANSPORT_MODELS, ["gpt-5.6-sol"]),
     maxBodyBytes: positiveInt("CODEX_TRANSPORT_MAX_BODY_BYTES", env.CODEX_TRANSPORT_MAX_BODY_BYTES, 8 * 1024 * 1024),
-    wsMaxBodyBytes: positiveInt("CODEX_TRANSPORT_WS_MAX_BODY_BYTES", env.CODEX_TRANSPORT_WS_MAX_BODY_BYTES, 170 * 1024),
+    wsMaxBodyBytes: positiveInt("CODEX_TRANSPORT_WS_MAX_BODY_BYTES", env.CODEX_TRANSPORT_WS_MAX_BODY_BYTES, 160 * 1024),
     requestTimeoutMs: positiveInt("CODEX_TRANSPORT_TIMEOUT_MS", env.CODEX_TRANSPORT_TIMEOUT_MS, 900_000),
     websocketConnectTimeoutMs: positiveInt("CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS", env.CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS, 15_000),
+    websocketFirstEventTimeoutMs: positiveInt("CODEX_TRANSPORT_WS_FIRST_EVENT_TIMEOUT_MS", env.CODEX_TRANSPORT_WS_FIRST_EVENT_TIMEOUT_MS, 60_000),
+    websocketIdleTimeoutMs: positiveInt("CODEX_TRANSPORT_WS_IDLE_TIMEOUT_MS", env.CODEX_TRANSPORT_WS_IDLE_TIMEOUT_MS, 180_000),
+    sseTimeoutMs: positiveInt("CODEX_TRANSPORT_SSE_TIMEOUT_MS", env.CODEX_TRANSPORT_SSE_TIMEOUT_MS, 600_000),
     sessionIdleMs: positiveInt("CODEX_TRANSPORT_SESSION_IDLE_MS", env.CODEX_TRANSPORT_SESSION_IDLE_MS, 5 * 60 * 1000),
     sessionMaxAgeMs: positiveInt("CODEX_TRANSPORT_SESSION_MAX_AGE_MS", env.CODEX_TRANSPORT_SESSION_MAX_AGE_MS, 55 * 60 * 1000),
     debug: boolFlag(env.CODEX_TRANSPORT_DEBUG, false),
@@ -635,8 +641,8 @@ export class CodexTransport {
     }
 
     // Layer A: never send an oversized frame over the WebSocket. ChatGPT's Codex
-    // WS backend drops inbound frames past ~171 KiB, which then only surfaces as a
-    // 900s idle timeout. Divert oversized bodies straight to the HTTP SSE path,
+    // WS backend drops inbound frames near ~171 KiB. Keep the configured cutoff
+    // below that cliff and divert oversized bodies straight to the HTTP SSE path,
     // which has no WS frame cap. The size measured here is exactly what would be
     // sent to socket.send (the `response.create` envelope).
     const chosenUpstreamBytes = Buffer.byteLength(JSON.stringify({ type: "response.create", ...continuation.body }));
@@ -795,9 +801,14 @@ export class CodexTransport {
     return new Promise<WsRunResult>((resolve, reject) => {
       let done = false;
       let timer: NodeJS.Timeout | undefined;
+      let firstEventReceived = false;
       const resetTimer = () => {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => fail(new Error(`Codex WebSocket idle timeout after ${this.config.requestTimeoutMs}ms`)), this.config.requestTimeoutMs);
+        const timeoutMs = firstEventReceived
+          ? (this.config.websocketIdleTimeoutMs ?? this.config.requestTimeoutMs)
+          : (this.config.websocketFirstEventTimeoutMs ?? this.config.requestTimeoutMs);
+        const phase = firstEventReceived ? "idle" : "first-event";
+        timer = setTimeout(() => fail(new Error(`Codex WebSocket ${phase} timeout after ${timeoutMs}ms`)), timeoutMs);
       };
       const cleanup = () => {
         if (timer) clearTimeout(timer);
@@ -818,6 +829,7 @@ export class CodexTransport {
         reject(error);
       };
       const onMessage = (raw: RawData) => {
+        firstEventReceived = true;
         resetTimer();
         let event: JsonRecord;
         try {
@@ -882,7 +894,7 @@ export class CodexTransport {
       method: "POST",
       headers: buildSseHeaders(cred, sessionId),
       body: JSON.stringify(fullBody),
-      signal: AbortSignal.timeout(this.config.requestTimeoutMs),
+      signal: AbortSignal.timeout(this.config.sseTimeoutMs ?? this.config.requestTimeoutMs),
     });
     let response = await request(credential);
     if (response.status === 401) {
@@ -962,7 +974,10 @@ export function startCodexTransport(config: CodexTransportConfig = loadCodexTran
   const transport = new CodexTransport(config);
   const server = transport.createServer();
   server.listen(config.listenPort, config.listenHost, () => {
-    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")} wsMaxBodyBytes=${config.wsMaxBodyBytes} encReasoning=${config.includeEncryptedReasoning} debug=${config.debug}\n`);
+    const wsFirstEventTimeoutMs = config.websocketFirstEventTimeoutMs ?? config.requestTimeoutMs;
+    const wsIdleTimeoutMs = config.websocketIdleTimeoutMs ?? config.requestTimeoutMs;
+    const sseTimeoutMs = config.sseTimeoutMs ?? config.requestTimeoutMs;
+    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")} wsMaxBodyBytes=${config.wsMaxBodyBytes} wsFirstEventTimeoutMs=${wsFirstEventTimeoutMs} wsIdleTimeoutMs=${wsIdleTimeoutMs} sseTimeoutMs=${sseTimeoutMs} encReasoning=${config.includeEncryptedReasoning} debug=${config.debug}\n`);
   });
   server.on("close", () => transport.close());
   return { server, transport };
