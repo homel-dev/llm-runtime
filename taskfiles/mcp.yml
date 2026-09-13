@@ -10,50 +10,49 @@ tasks:
     cmds:
       - |
         set -euo pipefail
+        kubectl apply -f k8s/namespace.yml
         helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
           --version {{.ENVOY_GATEWAY_VERSION}} \
-          --namespace envoy-gateway-system \
-          --create-namespace
-        kubectl wait --timeout=180s -n envoy-gateway-system \
+          --namespace llm-runtime \
+          --set config.envoyGateway.extensionApis.enableBackend=true
+        kubectl wait --timeout=180s -n llm-runtime \
           deployment/envoy-gateway --for=condition=Available
       - |
         set -euo pipefail
         helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
           --version {{.ENVOY_AI_GATEWAY_VERSION}} \
-          --namespace envoy-ai-gateway-system \
-          --create-namespace
-        if ! kubectl -n envoy-ai-gateway-system get secret llm-runtime-mcp-session >/dev/null 2>&1; then
+          --namespace llm-runtime
+        if ! kubectl -n llm-runtime get secret llm-runtime-mcp-session >/dev/null 2>&1; then
           seed="$(openssl rand -hex 32)"
-          kubectl -n envoy-ai-gateway-system create secret generic llm-runtime-mcp-session \
+          kubectl -n llm-runtime create secret generic llm-runtime-mcp-session \
             --from-literal=seed="${seed}"
         fi
-        seed="$(kubectl -n envoy-ai-gateway-system get secret llm-runtime-mcp-session -o jsonpath='{.data.seed}' | base64 -d)"
+        seed="$(kubectl -n llm-runtime get secret llm-runtime-mcp-session -o jsonpath='{.data.seed}' | base64 -d)"
         helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
           --version {{.ENVOY_AI_GATEWAY_VERSION}} \
-          --namespace envoy-ai-gateway-system \
-          --create-namespace \
+          --namespace llm-runtime \
           --set-string controller.mcp.sessionEncryption.seed="${seed}" \
           --set-string controller.requestHeaderAttributes="x-project-id:project.id,x-run-id:run.id,x-objective-id:objective.id,x-agent-role:agent.role" \
           --set-string controller.metricsRequestHeaderAttributes="x-project-id:project.id" \
           --set-string extProc.extraEnvVars[0].name=OTEL_EXPORTER_OTLP_ENDPOINT \
           --set-string extProc.extraEnvVars[0].value=http://otel-collector.llm-runtime.svc.cluster.local:4318
-        kubectl wait --timeout=180s -n envoy-ai-gateway-system \
+        kubectl wait --timeout=180s -n llm-runtime \
           deployment/ai-gateway-controller --for=condition=Available
 
   controllers:delete:
     desc: Remove cluster-wide Envoy AI Gateway and Envoy Gateway controllers
     prompt: This removes shared cluster-wide Envoy controllers. Continue?
     cmds:
-      - helm uninstall aieg -n envoy-ai-gateway-system --ignore-not-found
-      - helm uninstall aieg-crd -n envoy-ai-gateway-system --ignore-not-found
-      - helm uninstall eg -n envoy-gateway-system --ignore-not-found
+      - helm uninstall aieg -n llm-runtime --ignore-not-found
+      - helm uninstall aieg-crd -n llm-runtime --ignore-not-found
+      - helm uninstall eg -n llm-runtime --ignore-not-found
 
   deploy:
     desc: Deploy llm-runtime MCP Gateway, Memory Steward route, and peer policies
     cmds:
       - kubectl apply -k k8s/mcp
       - kubectl -n llm-runtime wait --for=condition=Programmed gateway/llm-runtime-mcp --timeout=180s
-      - kubectl -n envoy-gateway-system wait --for=condition=Ready pod -l gateway.envoyproxy.io/owning-gateway-namespace=llm-runtime,gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp --timeout=180s
+      - kubectl -n llm-runtime wait --for=condition=Ready pod -l gateway.envoyproxy.io/owning-gateway-namespace=llm-runtime,gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp --timeout=180s
 
   delete:
     desc: Delete llm-runtime MCP data-plane resources but preserve shared controllers
@@ -63,14 +62,14 @@ tasks:
   status:
     desc: Show MCP Gateway controllers, route status, proxy pods, Services, and telemetry
     cmds:
-      - kubectl -n envoy-gateway-system get deploy,svc,pod -l gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp
+      - kubectl -n llm-runtime get deploy,svc,pod -l gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp
       - kubectl -n llm-runtime get gateway,mcproute,backend,envoyproxy,clienttrafficpolicy
       - kubectl -n llm-runtime get deploy,svc,pvc tempo loki otel-collector 2>/dev/null || true
 
   logs:
     desc: Follow MCP Envoy proxy and ext-proc logs
     cmds:
-      - kubectl -n envoy-gateway-system logs -l gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp --all-containers=true -f --tail=200
+      - kubectl -n llm-runtime logs -l gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp --all-containers=true -f --tail=200
 
   check:
     desc: MCP initialize + tools/list through the Envoy ingress
@@ -87,7 +86,7 @@ tasks:
   metrics:
     desc: Fetch Envoy Prometheus metrics for the MCP data plane
     cmds:
-      - ./scripts/kcurl.sh llm-runtime http://llm-runtime-mcp-metrics.envoy-gateway-system.svc.cluster.local:19001/stats/prometheus
+      - ./scripts/kcurl.sh llm-runtime http://llm-runtime-mcp-metrics.llm-runtime.svc.cluster.local:19001/stats/prometheus
 
   observability:deploy:
     desc: Deploy Tempo, Loki, OTel Collector, Prometheus/OCO integration

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 namespace="${MCP_CHECK_NAMESPACE:-llm-runtime}"
-gateway_url="${MCP_GATEWAY_URL:-http://llm-runtime-mcp.envoy-gateway-system.svc.cluster.local:8000/mcp}"
+gateway_url="${MCP_GATEWAY_URL:-http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp}"
 protocol="${MCP_PROTOCOL_VERSION:-2025-06-18}"
 project_id="${PROJECT_ID:-}"
 query="${QUERY:-}"

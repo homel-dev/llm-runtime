@@ -53,7 +53,7 @@ data:
         metrics_path: /stats/prometheus
         static_configs:
           - targets:
-              - llm-runtime-mcp-metrics.envoy-gateway-system.svc.cluster.local:19001
+              - llm-runtime-mcp-metrics.llm-runtime.svc.cluster.local:19001
             labels:
               subsystem: llm-runtime
               component: mcp-gateway

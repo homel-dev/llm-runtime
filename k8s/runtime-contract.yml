@@ -20,8 +20,8 @@ data:
 
   LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 
-  MCP_GATEWAY_BASE_URL: "http://llm-runtime-mcp.envoy-gateway-system.svc.cluster.local:8000"
-  MCP_GATEWAY_URL: "http://llm-runtime-mcp.envoy-gateway-system.svc.cluster.local:8000/mcp"
+  MCP_GATEWAY_BASE_URL: "http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000"
+  MCP_GATEWAY_URL: "http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp"
   MCP_RETRIEVE_TOOL: "memory.retrieve_context"
 
   LLM_SMALL_MODEL: "llm-small"
