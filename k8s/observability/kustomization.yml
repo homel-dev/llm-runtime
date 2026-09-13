@@ -10,17 +10,19 @@ resources:
   - prometheus/deployment.yml
   - prometheus/service.yml
 
-  - tempo/configmap.yml
-  - tempo/deployment.yml
-  - tempo/service.yml
+  - tempo/config.yaml
+  - tempo/storage.yaml
+  - tempo/tempo.yaml
+  - tempo/networkpolicy.yaml
 
   - loki/configmap.yml
   - loki/deployment.yml
   - loki/service.yml
+  - loki/networkpolicy.yaml
 
-  - otel-collector/configmap.yml
-  - otel-collector/deployment.yml
-  - otel-collector/service.yml
+  - otel-collector/config.yaml
+  - otel-collector/collector.yaml
+  - otel-collector/networkpolicy.yaml
 
   - exporters/dcgm/daemonset.yml
   - exporters/dcgm/service.yml

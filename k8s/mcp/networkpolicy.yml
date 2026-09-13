@@ -75,3 +75,5 @@ spec:
       ports:
         - protocol: TCP
           port: 4317
+        - protocol: TCP
+          port: 4318

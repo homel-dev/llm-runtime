@@ -113,6 +113,7 @@ tasks:
     desc: Deploy Tempo, Loki, OTel Collector, Prometheus/OCO integration
     cmds:
       - kubectl apply -k k8s/observability
+      - kubectl -n llm-runtime delete networkpolicy allow-observability-console-traces-logs allow-otel-ingress --ignore-not-found=true
       - kubectl -n llm-runtime rollout status deployment/tempo --timeout=180s
       - kubectl -n llm-runtime rollout status deployment/loki --timeout=180s
       - kubectl -n llm-runtime rollout status deployment/otel-collector --timeout=180s
@@ -124,5 +125,6 @@ tasks:
     desc: Delete MCP observability workloads; PVCs remain unless explicitly removed
     cmds:
       - kubectl -n llm-runtime delete deployment,service tempo loki otel-collector --ignore-not-found=true
-      - kubectl -n llm-runtime delete configmap tempo-config loki-config otel-collector-config --ignore-not-found=true
+      - kubectl -n llm-runtime delete configmap llmrun-tempo-config tempo-config loki-config llmrun-otel-collector-config otel-collector-config --ignore-not-found=true
+      - kubectl -n llm-runtime delete networkpolicy llmrun-tempo-ingress llmrun-loki-ingress llmrun-otel-collector --ignore-not-found=true
       - kubectl -n llm-runtime delete configmap llm-runtime-mcp-dashboard --ignore-not-found=true
