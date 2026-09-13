@@ -27,6 +27,7 @@ export interface CodexTransportConfig {
   sessionIdleMs: number;
   sessionMaxAgeMs: number;
   debug: boolean;
+  includeEncryptedReasoning: boolean;
 }
 
 interface TokenData {
@@ -141,6 +142,7 @@ export function loadCodexTransportConfigFromEnv(env: NodeJS.ProcessEnv = process
     sessionIdleMs: positiveInt("CODEX_TRANSPORT_SESSION_IDLE_MS", env.CODEX_TRANSPORT_SESSION_IDLE_MS, 5 * 60 * 1000),
     sessionMaxAgeMs: positiveInt("CODEX_TRANSPORT_SESSION_MAX_AGE_MS", env.CODEX_TRANSPORT_SESSION_MAX_AGE_MS, 55 * 60 * 1000),
     debug: boolFlag(env.CODEX_TRANSPORT_DEBUG, false),
+    includeEncryptedReasoning: boolFlag(env.CODEX_TRANSPORT_INCLUDE_ENCRYPTED_REASONING, true),
   };
 }
 
@@ -384,7 +386,7 @@ function safeString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-function normalizeUpstreamBody(body: JsonRecord, sessionId?: string): JsonRecord {
+export function normalizeUpstreamBody(body: JsonRecord, sessionId: string | undefined, includeEncryptedReasoning: boolean): JsonRecord {
   const upstream = { ...body };
   // ChatGPT's Codex Responses backend does not accept the public Responses
   // max-token request fields. The gateway may receive them from generic
@@ -394,8 +396,15 @@ function normalizeUpstreamBody(body: JsonRecord, sessionId?: string): JsonRecord
   delete upstream.max_completion_tokens;
   delete upstream.max_tokens;
 
+  // reasoning.encrypted_content is Codex-specific: under store:false it carries the
+  // model's private reasoning across turns. It is a ~2KB blob per assistant turn that
+  // the RR agent then echoes back and logs on every stream update. Gemini has no
+  // equivalent. Make it opt-out so the Codex path can match Gemini's footprint when
+  // cross-turn reasoning persistence is not needed.
   const include = Array.isArray(upstream.include) ? [...upstream.include] : [];
-  if (!include.includes("reasoning.encrypted_content")) include.push("reasoning.encrypted_content");
+  if (includeEncryptedReasoning && !include.includes("reasoning.encrypted_content")) {
+    include.push("reasoning.encrypted_content");
+  }
   return {
     ...upstream,
     store: false,
@@ -553,7 +562,7 @@ export class CodexTransport {
     }
     const sessionId = normalizeSessionId(body.prompt_cache_key);
     const clientWantsStream = body.stream === true;
-    const fullBody = normalizeUpstreamBody(body, sessionId);
+    const fullBody = normalizeUpstreamBody(body, sessionId, this.config.includeEncryptedReasoning);
     const gatewayRequestId = safeString(req.headers["x-llm-gateway-request-id"], `codex-${randomUUID()}`);
     await this.locks.run(sessionId, async () => {
       await this.handleResponsesRequest(fullBody, sessionId, gatewayRequestId, clientWantsStream, res);
@@ -923,7 +932,7 @@ export function startCodexTransport(config: CodexTransportConfig = loadCodexTran
   const transport = new CodexTransport(config);
   const server = transport.createServer();
   server.listen(config.listenPort, config.listenHost, () => {
-    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")} wsMaxBodyBytes=${config.wsMaxBodyBytes} debug=${config.debug}\n`);
+    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")} wsMaxBodyBytes=${config.wsMaxBodyBytes} encReasoning=${config.includeEncryptedReasoning} debug=${config.debug}\n`);
   });
   server.on("close", () => transport.close());
   return { server, transport };

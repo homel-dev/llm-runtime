@@ -9,6 +9,7 @@ import type { AddressInfo } from "node:net";
 import { WebSocketServer } from "ws";
 import {
   buildContinuationRequest,
+  normalizeUpstreamBody,
   CodexAuthStore,
   CodexTransport,
   extractChatGptAccountId,
@@ -40,6 +41,7 @@ function config(authFile: string, baseUrl = "https://chatgpt.com/backend-api"): 
     sessionIdleMs: 60_000,
     sessionMaxAgeMs: 60_000,
     debug: false,
+    includeEncryptedReasoning: true,
   };
 }
 
@@ -272,4 +274,15 @@ test("transport reuses one Codex websocket and sends previous_response_id plus o
     upstreamWs.close();
     upstreamHttp.close();
   }
+});
+
+test("encrypted-reasoning inclusion is gated by the flag", () => {
+  const on = normalizeUpstreamBody({ model: "gpt-5.6-sol", input: [] }, "rr-s", true);
+  assert.ok(Array.isArray(on.include) && (on.include as string[]).includes("reasoning.encrypted_content"));
+  assert.equal(on.store, false);
+
+  const off = normalizeUpstreamBody({ model: "gpt-5.6-sol", input: [] }, "rr-s", false);
+  const offInclude = Array.isArray(off.include) ? (off.include as string[]) : [];
+  assert.ok(!offInclude.includes("reasoning.encrypted_content"));
+  assert.equal(off.store, false);
 });
