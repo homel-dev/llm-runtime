@@ -49,6 +49,7 @@ export interface AntigravityDirectConfig {
   oauthClientId: string;
   oauthClientSecret: string;
   userAgent: string;
+  debug: boolean;
 }
 
 export type AntigravityFetch = typeof fetch;
@@ -212,6 +213,7 @@ export function loadAntigravityDirectConfigFromEnv(env: NodeJS.ProcessEnv = proc
     oauthClientId: requiredEnv(env, "ANTIGRAVITY_ADAPTER_OAUTH_CLIENT_ID"),
     oauthClientSecret: requiredEnv(env, "ANTIGRAVITY_ADAPTER_OAUTH_CLIENT_SECRET"),
     userAgent: env.ANTIGRAVITY_ADAPTER_USER_AGENT ?? buildAntigravityHarnessUserAgent(clientVersion),
+    debug: ["1", "true", "yes", "on"].includes((env.ANTIGRAVITY_ADAPTER_DEBUG ?? "").trim().toLowerCase()),
   };
 }
 
@@ -683,6 +685,34 @@ function providerError(message: string, requestId: string): Record<string, unkno
   return { error: { message, type: "gemini_subscription_error", request_id: requestId } };
 }
 
+function bodyBreakdown(root: unknown): { totalBytes: number; topKeys: Array<{ key: string; bytes: number }>; heaviest: Array<{ path: string; kind: string; bytes: number }> } {
+  const size = (v: unknown) => Buffer.byteLength(JSON.stringify(v) ?? "");
+  const totalBytes = size(root);
+  const topKeys: Array<{ key: string; bytes: number }> = [];
+  const heaviest: Array<{ path: string; kind: string; bytes: number }> = [];
+  const walk = (val: unknown, path: string, depth: number): void => {
+    if (Array.isArray(val)) {
+      val.forEach((el, i) => {
+        const kind = el && typeof el === "object" && !Array.isArray(el)
+          ? String((el as Record<string, unknown>).type ?? (el as Record<string, unknown>).role ?? "obj")
+          : typeof el;
+        heaviest.push({ path: `${path}[${i}]`, kind, bytes: size(el) });
+        if (depth < 3 && el && typeof el === "object") walk(el, `${path}[${i}]`, depth + 1);
+      });
+    } else if (val && typeof val === "object" && depth < 3) {
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) walk(v, path ? `${path}.${k}` : k, depth + 1);
+    }
+  };
+  if (root && typeof root === "object" && !Array.isArray(root)) {
+    for (const [k, v] of Object.entries(root as Record<string, unknown>)) { topKeys.push({ key: k, bytes: size(v) }); walk(v, k, 1); }
+    topKeys.sort((a, b) => b.bytes - a.bytes);
+  } else {
+    walk(root, "", 0);
+  }
+  heaviest.sort((a, b) => b.bytes - a.bytes);
+  return { totalBytes, topKeys: topKeys.slice(0, 8), heaviest: heaviest.slice(0, 12) };
+}
+
 export function createAntigravityDirectAdapter(config: AntigravityDirectConfig, deps: AntigravityDirectDependencies = {}) {
   const fetcher = deps.fetcher ?? fetch;
   const now = deps.now ?? Date.now;
@@ -891,6 +921,7 @@ export function createAntigravityDirectAdapter(config: AntigravityDirectConfig, 
       const outputLimit = requestedOutputTokenLimit(body);
       const bufferForPolicy = stream && outputLimit !== undefined;
       logEvent({ event: "request.start", requestId, model, providerModel: wireModel, requestBytes: bytes, stream, bufferedForOutputPolicy: bufferForPolicy });
+      if (config.debug) logEvent({ event: "body.breakdown", transport: "gemini", format: "chat_completions", requestId, ...bodyBreakdown(body) });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(new Error(`Antigravity direct request timed out after ${config.timeoutMs}ms`)), config.timeoutMs);
       timer.unref();
@@ -995,7 +1026,7 @@ export function createAntigravityDirectAdapter(config: AntigravityDirectConfig, 
 export function startAntigravityDirectAdapter(config: AntigravityDirectConfig = loadAntigravityDirectConfigFromEnv()): ReturnType<typeof createAntigravityDirectAdapter> {
   const server = createAntigravityDirectAdapter(config);
   server.listen(config.listenPort, "127.0.0.1", () => {
-    logEvent({ event: "startup", listen: `127.0.0.1:${config.listenPort}`, models: config.models, modelMap: config.modelMap, inferenceBaseUrls: config.inferenceBaseUrls });
+    logEvent({ event: "startup", listen: `127.0.0.1:${config.listenPort}`, models: config.models, modelMap: config.modelMap, inferenceBaseUrls: config.inferenceBaseUrls, debug: config.debug });
   });
   return server;
 }

@@ -386,6 +386,34 @@ function safeString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function bodyBreakdown(root: unknown): { totalBytes: number; topKeys: Array<{ key: string; bytes: number }>; heaviest: Array<{ path: string; kind: string; bytes: number }> } {
+  const size = (v: unknown) => Buffer.byteLength(JSON.stringify(v) ?? "");
+  const totalBytes = size(root);
+  const topKeys: Array<{ key: string; bytes: number }> = [];
+  const heaviest: Array<{ path: string; kind: string; bytes: number }> = [];
+  const walk = (val: unknown, path: string, depth: number): void => {
+    if (Array.isArray(val)) {
+      val.forEach((el, i) => {
+        const kind = el && typeof el === "object" && !Array.isArray(el)
+          ? String((el as Record<string, unknown>).type ?? (el as Record<string, unknown>).role ?? "obj")
+          : typeof el;
+        heaviest.push({ path: `${path}[${i}]`, kind, bytes: size(el) });
+        if (depth < 3 && el && typeof el === "object") walk(el, `${path}[${i}]`, depth + 1);
+      });
+    } else if (val && typeof val === "object" && depth < 3) {
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) walk(v, path ? `${path}.${k}` : k, depth + 1);
+    }
+  };
+  if (root && typeof root === "object" && !Array.isArray(root)) {
+    for (const [k, v] of Object.entries(root as Record<string, unknown>)) { topKeys.push({ key: k, bytes: size(v) }); walk(v, k, 1); }
+    topKeys.sort((a, b) => b.bytes - a.bytes);
+  } else {
+    walk(root, "", 0);
+  }
+  heaviest.sort((a, b) => b.bytes - a.bytes);
+  return { totalBytes, topKeys: topKeys.slice(0, 8), heaviest: heaviest.slice(0, 12) };
+}
+
 export function normalizeUpstreamBody(body: JsonRecord, sessionId: string | undefined, includeEncryptedReasoning: boolean): JsonRecord {
   const upstream = { ...body };
   // ChatGPT's Codex Responses backend does not accept the public Responses
@@ -624,6 +652,8 @@ export class CodexTransport {
       await this.fallbackSse(fullBody, sessionId, stream, res, new Error(`upstream body ${chosenUpstreamBytes}B over WS cap ${this.config.wsMaxBodyBytes}B`));
       return;
     }
+
+    if (this.config.debug) this.debug({ event: "body.breakdown", transport: "codex", format: "responses", requestId, sessionId, ...bodyBreakdown(fullBody) });
 
     const run = async (targetEntry: SessionEntry | undefined, body: JsonRecord, usedContinuation: boolean): Promise<WsRunResult> => {
       const upstreamBytes = Buffer.byteLength(JSON.stringify({ type: "response.create", ...body }));

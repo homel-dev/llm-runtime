@@ -29,6 +29,7 @@ const config: AntigravityDirectConfig = {
   oauthClientId: "client",
   oauthClientSecret: "secret",
   userAgent: "antigravity/hub/1.1.26 (test)",
+    debug: false,
 };
 
 function callServer(port: number, path: string, body: unknown): Promise<{ status: number; body: string; headers: IncomingMessage["headers"] }> {
