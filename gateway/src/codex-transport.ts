@@ -26,6 +26,7 @@ export interface CodexTransportConfig {
   websocketConnectTimeoutMs: number;
   sessionIdleMs: number;
   sessionMaxAgeMs: number;
+  debug: boolean;
 }
 
 interface TokenData {
@@ -105,6 +106,11 @@ function positiveInt(label: string, value: string | undefined, fallback: number)
   return parsed;
 }
 
+function boolFlag(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
 export function loadCodexTransportConfigFromEnv(env: NodeJS.ProcessEnv = process.env): CodexTransportConfig {
   const listenHost = env.CODEX_TRANSPORT_LISTEN_HOST ?? "127.0.0.1";
   if (!["127.0.0.1", "localhost", "::1"].includes(listenHost)) {
@@ -134,6 +140,7 @@ export function loadCodexTransportConfigFromEnv(env: NodeJS.ProcessEnv = process
     websocketConnectTimeoutMs: positiveInt("CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS", env.CODEX_TRANSPORT_WS_CONNECT_TIMEOUT_MS, 15_000),
     sessionIdleMs: positiveInt("CODEX_TRANSPORT_SESSION_IDLE_MS", env.CODEX_TRANSPORT_SESSION_IDLE_MS, 5 * 60 * 1000),
     sessionMaxAgeMs: positiveInt("CODEX_TRANSPORT_SESSION_MAX_AGE_MS", env.CODEX_TRANSPORT_SESSION_MAX_AGE_MS, 55 * 60 * 1000),
+    debug: boolFlag(env.CODEX_TRANSPORT_DEBUG, false),
   };
 }
 
@@ -244,8 +251,24 @@ export class CodexAuthStore {
   }
 }
 
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    const obj = value as JsonRecord;
+    const out: JsonRecord = {};
+    for (const key of Object.keys(obj).sort()) out[key] = canonicalize(obj[key]);
+    return out;
+  }
+  return value;
+}
+
 function jsonEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  // Structural equality that ignores object key order (JSON key order is not
+  // semantically meaningful; array order is preserved). Without this, a
+  // function_call item echoed back by the client with the same fields in a
+  // different key order was treated as a mismatch, forcing every turn to a full
+  // replay and ballooning the upstream frame into the WS size cap.
+  return JSON.stringify(canonicalize(a)) === JSON.stringify(canonicalize(b));
 }
 
 function requestWithoutInput(body: JsonRecord): JsonRecord {
@@ -298,6 +321,7 @@ function itemFieldDiff(clientItem: unknown, storedItem: unknown): JsonRecord {
 export function buildContinuationRequest(
   fullBody: JsonRecord,
   continuation: CodexContinuation | undefined,
+  options: { debug?: boolean } = {},
 ): ContinuationResult {
   if (!continuation) return { body: fullBody, usedContinuation: false, missReason: "no_continuation" };
   const aNoInput = requestWithoutInput(fullBody);
@@ -314,12 +338,16 @@ export function buildContinuationRequest(
   }
   for (let i = 0; i < previous.length; i++) {
     if (!jsonEqual(current[i], previous[i])) {
-      return { body: fullBody, usedContinuation: false, missReason: "prev_input_mismatch", missDetail: { index: i, storedType: itemType(previous[i]), clientType: itemType(current[i]) } };
+      const detail: JsonRecord = { index: i, storedType: itemType(previous[i]), clientType: itemType(current[i]) };
+      if (options.debug) detail.diffKeys = itemFieldDiff(current[i], previous[i]);
+      return { body: fullBody, usedContinuation: false, missReason: "prev_input_mismatch", missDetail: detail };
     }
   }
   for (let i = 0; i < continuation.lastResponseItems.length; i++) {
     if (!replayItemsEqual(current[previous.length + i], continuation.lastResponseItems[i])) {
-      return { body: fullBody, usedContinuation: false, missReason: "response_item_mismatch", missDetail: { index: i, storedType: itemType(continuation.lastResponseItems[i]), clientType: itemType(current[previous.length + i]), diffKeys: itemFieldDiff(current[previous.length + i], continuation.lastResponseItems[i]) } };
+      const detail: JsonRecord = { index: i, storedType: itemType(continuation.lastResponseItems[i]), clientType: itemType(current[previous.length + i]) };
+      if (options.debug) detail.diffKeys = itemFieldDiff(current[previous.length + i], continuation.lastResponseItems[i]);
+      return { body: fullBody, usedContinuation: false, missReason: "response_item_mismatch", missDetail: detail };
     }
   }
   return {
@@ -560,10 +588,13 @@ export class CodexTransport {
     this.stats.lastFullRequestBytes = fullBytes;
     let credential = await this.auth.credential();
     let entry = await this.acquireSession(sessionId, credential, requestId);
-    let continuation = buildContinuationRequest(fullBody, entry?.continuation);
+    let continuation = buildContinuationRequest(fullBody, entry?.continuation, { debug: this.config.debug });
     if (entry?.continuation && !continuation.usedContinuation) {
       this.stats.continuationMisses++;
-      this.log({ event: "codex.continuation_miss", requestId, sessionId, reason: continuation.missReason, detail: continuation.missDetail });
+      const detail = (continuation.missDetail ?? {}) as JsonRecord;
+      const { diffKeys, ...baseDetail } = detail;
+      this.log({ event: "codex.continuation_miss", requestId, sessionId, reason: continuation.missReason, detail: baseDetail });
+      if (diffKeys) this.debug({ event: "codex.continuation_miss.diff", requestId, sessionId, reason: continuation.missReason, index: baseDetail.index, diffKeys });
     }
 
     // Layer A: never send an oversized frame over the WebSocket. ChatGPT's Codex
@@ -881,13 +912,18 @@ export class CodexTransport {
   private log(event: JsonRecord): void {
     process.stdout.write(`${JSON.stringify({ ts: new Date().toISOString(), component: "llm-codex-transport", ...event })}\n`);
   }
+
+  private debug(event: JsonRecord): void {
+    if (!this.config.debug) return;
+    this.log({ ...event, debug: true });
+  }
 }
 
 export function startCodexTransport(config: CodexTransportConfig = loadCodexTransportConfigFromEnv()) {
   const transport = new CodexTransport(config);
   const server = transport.createServer();
   server.listen(config.listenPort, config.listenHost, () => {
-    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")}\n`);
+    process.stdout.write(`llm-runtime Codex transport listening on ${config.listenHost}:${config.listenPort} models=${config.models.join("|")} wsMaxBodyBytes=${config.wsMaxBodyBytes} debug=${config.debug}\n`);
   });
   server.on("close", () => transport.close());
   return { server, transport };

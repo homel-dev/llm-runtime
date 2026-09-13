@@ -1,0 +1,14 @@
+# Envoy AI Gateway v1.0.0 runtime-owned values.
+# Keep comma-separated attribute mappings in YAML so Helm does not parse
+# embedded commas as --set assignment separators.
+envoyGateway:
+  namespace: llm-runtime
+
+controller:
+  requestHeaderAttributes: "x-project-id:project.id,x-run-id:run.id,x-objective-id:objective.id,x-agent-role:agent.role"
+  metricsRequestHeaderAttributes: "x-project-id:project.id"
+
+extProc:
+  extraEnvVars:
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: "http://otel-collector.llm-runtime.svc.cluster.local:4318"

@@ -39,6 +39,7 @@ function config(authFile: string, baseUrl = "https://chatgpt.com/backend-api"): 
     websocketConnectTimeoutMs: 1000,
     sessionIdleMs: 60_000,
     sessionMaxAgeMs: 60_000,
+    debug: false,
   };
 }
 
@@ -74,6 +75,65 @@ test("continuation strips the replayed prefix and keeps only the new delta", () 
     lastResponseItems: [assistant],
   });
   assert.equal(changedTools.usedContinuation, false);
+});
+
+test("continuation miss field diff is emitted only under debug", () => {
+  const first = {
+    model: "gpt-5.6-sol",
+    store: false,
+    stream: true,
+    prompt_cache_key: "rr-test",
+    input: [{ role: "user", content: [{ type: "input_text", text: "hi" }] }],
+  };
+  const stored = { type: "function_call", id: "fc_server", call_id: "call_1", name: "read", arguments: "{}", status: "completed" };
+  const second = {
+    ...first,
+    input: [
+      ...first.input,
+      { type: "function_call", id: "fc_client", call_id: "call_1", name: "read", arguments: "{}" },
+    ],
+  };
+  const cont = { lastRequestBody: first, lastResponseId: "resp_1", lastResponseItems: [stored] };
+
+  const quiet = buildContinuationRequest(second, cont);
+  assert.equal(quiet.usedContinuation, false);
+  assert.equal(quiet.missReason, "response_item_mismatch");
+  assert.equal((quiet.missDetail as Record<string, unknown>).diffKeys, undefined);
+
+  const loud = buildContinuationRequest(second, cont, { debug: true });
+  assert.equal(loud.missReason, "response_item_mismatch");
+  const diffKeys = (loud.missDetail as Record<string, Record<string, unknown>>).diffKeys;
+  assert.ok(diffKeys && diffKeys.id, "debug diff should flag the differing id field");
+});
+
+test("continuation survives function_call items replayed with a different key order", () => {
+  const first = {
+    model: "gpt-5.6-sol",
+    store: false,
+    stream: true,
+    prompt_cache_key: "rr-test",
+    input: [{ role: "user", content: [{ type: "input_text", text: "hi" }] }],
+  };
+  // Stored (from provider output) and client-replayed carry identical fields and
+  // values but in a different key order — this must NOT break continuation.
+  const stored = { type: "function_call", id: "fc_1", call_id: "call_1", name: "read", arguments: "{}", status: "completed" };
+  const replayedReordered = { arguments: "{}", name: "read", call_id: "call_1", id: "fc_1", type: "function_call" };
+  const second = {
+    ...first,
+    input: [
+      ...first.input,
+      replayedReordered,
+      { output: "real result", call_id: "call_1", type: "function_call_output" },
+    ],
+  };
+  const result = buildContinuationRequest(second, {
+    lastRequestBody: first,
+    lastResponseId: "resp_1",
+    lastResponseItems: [stored],
+  });
+  assert.equal(result.usedContinuation, true);
+  assert.equal(result.body.previous_response_id, "resp_1");
+  assert.deepEqual(result.body.input, [{ output: "real result", call_id: "call_1", type: "function_call_output" }]);
 });
 
 test("session ids are header-safe and ChatGPT account id comes from the access token", () => {

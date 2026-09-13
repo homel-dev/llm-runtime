@@ -6,14 +6,33 @@ vars:
 
 tasks:
   controllers:deploy:
-    desc: Install pinned Envoy Gateway and Envoy AI Gateway controllers/CRDs
+    desc: Install pinned Gateway API, Envoy Gateway, and Envoy AI Gateway CRDs/controllers
     cmds:
       - |
         set -euo pipefail
         kubectl apply -f k8s/namespace.yml
+
+        helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
+          --version {{.ENVOY_GATEWAY_VERSION}} \
+          --set crds.gatewayAPI.enabled=true \
+          --set crds.gatewayAPI.channel=standard \
+          --set crds.envoyGateway.enabled=true \
+          | kubectl apply --server-side --force-conflicts -f -
+
+        for crd in \
+          gateways.gateway.networking.k8s.io \
+          gatewayclasses.gateway.networking.k8s.io \
+          envoyproxies.gateway.envoyproxy.io \
+          clienttrafficpolicies.gateway.envoyproxy.io \
+          backends.gateway.envoyproxy.io
+        do
+          kubectl wait --for=condition=Established "crd/${crd}" --timeout=120s
+        done
+
         helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
           --version {{.ENVOY_GATEWAY_VERSION}} \
           --namespace llm-runtime \
+          --skip-crds \
           --set config.envoyGateway.extensionApis.enableBackend=true
         kubectl wait --timeout=180s -n llm-runtime \
           deployment/envoy-gateway --for=condition=Available
@@ -22,6 +41,9 @@ tasks:
         helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
           --version {{.ENVOY_AI_GATEWAY_VERSION}} \
           --namespace llm-runtime
+        kubectl wait --for=condition=Established \
+          crd/mcproutes.aigateway.envoyproxy.io --timeout=120s
+
         if ! kubectl -n llm-runtime get secret llm-runtime-mcp-session >/dev/null 2>&1; then
           seed="$(openssl rand -hex 32)"
           kubectl -n llm-runtime create secret generic llm-runtime-mcp-session \
@@ -31,11 +53,8 @@ tasks:
         helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \
           --version {{.ENVOY_AI_GATEWAY_VERSION}} \
           --namespace llm-runtime \
-          --set-string controller.mcp.sessionEncryption.seed="${seed}" \
-          --set-string controller.requestHeaderAttributes="x-project-id:project.id,x-run-id:run.id,x-objective-id:objective.id,x-agent-role:agent.role" \
-          --set-string controller.metricsRequestHeaderAttributes="x-project-id:project.id" \
-          --set-string extProc.extraEnvVars[0].name=OTEL_EXPORTER_OTLP_ENDPOINT \
-          --set-string extProc.extraEnvVars[0].value=http://otel-collector.llm-runtime.svc.cluster.local:4318
+          --values k8s/mcp/ai-gateway-values.yml \
+          --set-string controller.mcp.sessionEncryption.seed="${seed}"
         kubectl wait --timeout=180s -n llm-runtime \
           deployment/ai-gateway-controller --for=condition=Available
 
@@ -48,8 +67,10 @@ tasks:
       - helm uninstall eg -n llm-runtime --ignore-not-found
 
   deploy:
-    desc: Deploy llm-runtime MCP Gateway, Memory Steward route, and peer policies
+    desc: Install prerequisites and deploy the complete llm-runtime MCP stack
     cmds:
+      - task: controllers:deploy
+      - task: observability:deploy
       - kubectl apply -k k8s/mcp
       - kubectl -n llm-runtime wait --for=condition=Programmed gateway/llm-runtime-mcp --timeout=180s
       - kubectl -n llm-runtime wait --for=condition=Ready pod -l gateway.envoyproxy.io/owning-gateway-namespace=llm-runtime,gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp --timeout=180s
