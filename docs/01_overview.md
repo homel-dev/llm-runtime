@@ -1,6 +1,6 @@
 # SHARED LLM RUNTIME MODEL
 
-*Shared inference and trusted provider infrastructure — architecture specification.*
+*Shared model-serving, provider, and MCP infrastructure — architecture specification.*
 
 ---
 
@@ -11,7 +11,7 @@
 - [2. Design Principles](#2-design-principles)
 - [3. Runtime Architecture](#3-runtime-architecture)
 - [4. Local Inference Tiers](#4-local-inference-tiers)
-- [5. Trusted Subscription Gateway](#5-trusted-subscription-gateway)
+- [5. Runtime Gateways](#5-runtime-gateways)
 - [6. Runtime Contract](#6-runtime-contract)
 - [7. Consumer Ownership Boundary](#7-consumer-ownership-boundary)
 - [8. Network and Security Boundary](#8-network-and-security-boundary)
@@ -51,18 +51,16 @@ infrastructure dependency fails.
 
 ## 1. Purpose
 
-Homel projects require reusable access to local inference capacity and trusted
-subscription-backed frontier models. Duplicating provider transports,
-credentials, model servers, GPU allocations, and telemetry inside each project
-would multiply operational and security surface.
+Homel projects require reusable access to local inference capacity,
+subscription-backed frontier models, and shared MCP capabilities provided by
+independently owned backend services.
 
-`llm-runtime` centralizes that infrastructure while keeping consumer behavior
-independent.
+Duplicating model servers, provider transports, credentials, MCP routing, and
+runtime network policy inside every consumer would multiply operational and
+security surface.
 
-The runtime therefore exposes two service classes:
-
-1. local capacity-oriented inference tiers;
-2. a trusted OpenAI-compatible gateway for subscription-backed providers.
+`llm-runtime` centralizes those infrastructure concerns while preserving
+consumer ownership of application meaning.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -104,30 +102,40 @@ consumer policy.
 
 ## 3. Runtime Architecture
 
-All runtime-owned Kubernetes resources use the `llm-runtime` namespace.
+Runtime-owned Kubernetes resources use the `llm-runtime` namespace except for
+backend-specific policy that must be installed in a backend namespace.
 
 ```mermaid
 flowchart LR
     C[Consumer projects]
 
-    subgraph NS[llm-runtime]
-        S[Local inference tiers]
-        G[Trusted subscription gateway]
-        T[Runtime telemetry]
+    subgraph LRUNTIME[llm-runtime]
+        G[LLM Gateway]
+        S[llm-small]
+        L[llm-large]
+        M[MCP Gateway]
     end
 
-    C --> S
-    C --> G
-    S --> T
-    G --> T
+    P1[ChatGPT / Codex]
+    P2[Google AI subscription]
+    MS[Memory Steward<br/>namespace ms]
+
+    C -->|Model API| G
+    G --> S
+    G --> L
+    G --> P1
+    G --> P2
+
+    C -->|MCP| M
+    M --> MS
 ```
 
-The diagram describes one idea: consumers call runtime services while
-`llm-runtime` owns the infrastructure and telemetry behind those services.
+All active consumer model traffic enters through the LLM gateway. Local
+inference Services are trusted gateway upstreams rather than general consumer
+endpoints.
 
-Local inference is exposed as shared capacity on TCP/8000. The subscription
-gateway has a narrower ingress boundary: approved RR agent Pods may use its API
-port and runtime Prometheus may use its dedicated metrics port.
+MCP access uses a separate ingress and routing plane. Neither gateway acquires
+authority over consumer workflow semantics.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -135,7 +143,7 @@ port and runtime Prometheus may use its dedicated metrics port.
 
 ## 4. Local Inference Tiers
 
-The stable capacity tier names are:
+The repository retains three tier directories:
 
 ```text
 small
@@ -143,60 +151,66 @@ medium
 large
 ```
 
-Current manifests deploy:
+The active root Kustomization deploys only `small` and `large`.
 
-| Tier | Current implementation | Current model | Relevant capacity |
-| --- | --- | --- | --- |
-| `small` | llama.cpp server | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` | CPU-backed |
-| `medium` | vLLM | `curiousmind147/microsoft-phi-4-AWQ-4bit-GEMM` | 1 GPU |
-| `large` | vLLM | `DeepSeek-R1-Distill-Llama-70B-AWQ` | 3 GPUs, pipeline parallel |
+| Tier | Desired State | Current implementation | Current model | Capacity |
+| --- | --- | --- | --- | --- |
+| `small` | active | llama.cpp server | `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` | CPU-backed |
+| `medium` | disabled | retained vLLM manifest | `curiousmind147/microsoft-phi-4-AWQ-4bit-GEMM` | 1 GPU when enabled |
+| `large` | active | vLLM | `Qwen2.5-72B-Instruct-AWQ` | 3 GPUs, pipeline parallel |
 
-These identities are current Observed State, not permanent tier contract
-fields. A consumer that depends on a concrete model identity must verify
-`/v1/models` and treat mismatch as failure.
-
-Stable Services are:
+The active consumer contract exposes local capacity through gateway aliases:
 
 ```text
-llm-small.llm-runtime.svc.cluster.local:8000
-llm-medium.llm-runtime.svc.cluster.local:8000
-llm-large.llm-runtime.svc.cluster.local:8000
+llm-small
+llm-large
 ```
+
+`LLM_MEDIUM_MODEL` is empty in contract version `v2`.
+
+Concrete model identities are Observed State. Consumers that require a concrete
+identity must validate the advertised model contract.
 
 [Back to top](#shared-llm-runtime-model)
 
 ---
 
-## 5. Trusted Subscription Gateway
+## 5. Runtime Gateways
 
-The gateway is a runtime service owned by `llm-runtime`; it is not RR-owned
-application code.
-
-Stable Service:
+The consumer-facing LLM endpoint is:
 
 ```text
-llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
+http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 ```
 
-The Pod contains trusted loopback provider transports. The externally visible
-router does not pass provider credentials to consumers.
-
-Current advertised model aliases are:
+Current configured model aliases are:
 
 | Gateway model | Trusted backend |
 | --- | --- |
-| `gpt-5.6-sol` | Stateful Codex Responses transport on loopback port 10533 |
-| `gemini-subscription-pro` | Antigravity `gemini-3.1-pro-high` on loopback port 10532 |
-| `gemini-subscription-auto` | Antigravity `gemini-3.7-flash-medium` on loopback port 10532 |
+| `llm-small` | local small inference Service |
+| `llm-large` | local large inference Service |
+| `gpt-5.6-sol` | stateful ChatGPT/Codex Responses transport |
+| `gemini-subscription-pro` | direct Cloud Code Assist transport using `gemini-pro-agent` |
+| `gemini-subscription-auto` | direct Cloud Code Assist transport using `gemini-3.7-flash-medium` |
 
-`gemini-subscription-auto` is a compatibility alias; it does not represent
-provider-side automatic model selection.
+The consumer-facing MCP endpoint is:
 
-The PVC names `rr-openai-subscription-auth` and
-`rr-gemini-subscription-auth` remain stable for migration continuity. Their
-legacy names do not define current ownership.
+```text
+http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp
+```
 
-Detailed gateway behavior is defined in [04_gateway.md](04_gateway.md).
+The current Memory Steward route allowlists:
+
+```text
+memory.retrieve_context
+memory.reference.search
+memory.reference.get
+```
+
+Clients discover the public multiplexed MCP tool names through `tools/list`.
+
+Detailed behavior is defined in [04_gateway.md](04_gateway.md) and
+[06_mcp_service.md](06_mcp_service.md).
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -204,26 +218,42 @@ Detailed gateway behavior is defined in [04_gateway.md](04_gateway.md).
 
 ## 6. Runtime Contract
 
-`k8s/runtime-contract.yml` publishes:
+`k8s/runtime-contract.yml` publishes contract version `v2`.
+
+All model base URL keys terminate at the LLM gateway:
 
 ```text
 LLM_SMALL_BASE_URL
 LLM_MEDIUM_BASE_URL
 LLM_LARGE_BASE_URL
 LLM_GATEWAY_BASE_URL
+```
+
+Model selection is published separately:
+
+```text
+LLM_SMALL_MODEL=llm-small
+LLM_MEDIUM_MODEL=
+LLM_LARGE_MODEL=llm-large
+```
+
+The MCP contract publishes:
+
+```text
+MCP_GATEWAY_BASE_URL
+MCP_GATEWAY_URL
+MCP_RETRIEVE_TOOL
+```
+
+Runtime metadata publishes:
+
+```text
 LLM_RUNTIME_NAMESPACE
 LLM_API_COMPATIBILITY
 CONTRACT_VERSION
 ```
 
-The current contract version is `v1`; API compatibility is declared as
-`openai`.
-
-The contract does not expose provider credentials, quantization parameters,
-GPU identifiers, provider login state, or project roles.
-
-Consumer-visible contract changes are governed by
-[02_runtime_contract.md](02_runtime_contract.md).
+A base URL does not imply that a corresponding tier is active.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -263,24 +293,24 @@ own application meaning and authority.
 
 ## 8. Network and Security Boundary
 
-Local inference Pods carry `app.kubernetes.io/component: inference` and are
-selected by the general runtime consumer NetworkPolicy on TCP/8000.
+Local inference Pods carry `app.kubernetes.io/component: inference`.
 
-The gateway uses a separate ingress and egress policy:
+The active general runtime NetworkPolicy permits local inference TCP/8000 from
+the LLM gateway and runtime Prometheus. Consumer workloads therefore use the LLM
+gateway rather than receiving direct local inference access from that policy.
 
-- RR `rr-pi-agent` Pods may connect to TCP/8000;
-- runtime Prometheus may connect to TCP/9091;
-- router-to-provider traffic uses Pod loopback;
-- provider egress allows cluster DNS and public TCP/443 while excluding the
-  private, link-local, and CGNAT address ranges declared by the policy;
-- gateway containers use the security contexts declared by the Deployment.
+The LLM gateway has separate ingress and egress policy for approved RR agent
+Pods, runtime Prometheus, local inference upstreams, DNS, and required public
+provider endpoints.
 
-Subscription authentication is persisted on dedicated PVCs and is not part of
-the runtime ConfigMap contract.
+The MCP gateway has separate policy for approved RR agent Pods, the runtime
+operator-check Pod, metrics, DNS, Memory Steward TCP/8081, and runtime telemetry.
 
-NetworkPolicy is an enforcement boundary, not a provider-health guarantee. A
-permitted connection can still fail because of authentication, quota, provider
-availability, or transport failure.
+A backend-side NetworkPolicy in namespace `ms` permits Memory Steward ingress
+from the runtime MCP gateway data-plane Pods.
+
+Provider and backend credentials remain outside the public runtime ConfigMap
+contract.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -322,20 +352,21 @@ runtime service is effective for a project workload.
 Relevant repository areas are:
 
 ```text
-gateway/                 trusted gateway implementation and tests
-k8s/small/               small local tier
-k8s/medium/              medium local tier
-k8s/large/               large local tier
-k8s/gateway/             gateway Deployment, Service, PVCs, RBAC, login Pods
-k8s/observability/       Prometheus and DCGM exporter
+gateway/                 trusted LLM gateway implementation and tests
+k8s/small/               active small local tier
+k8s/medium/              retained disabled medium tier
+k8s/large/               active large local tier
+k8s/gateway/             LLM gateway Deployment, Service, PVCs, RBAC, login Pods
+k8s/mcp/                 MCP Gateway API, MCPRoute, backend and network policy
+k8s/observability/       runtime telemetry infrastructure
 k8s/oco-consumer/        Grafana/OCO datasource, dashboards, reader RBAC
-k8s/runtime-contract.yml stable consumer endpoint contract
-scripts/                 health, smoke, metrics, gateway and exposure helpers
-hack/                    benchmark and documentation checks
+k8s/runtime-contract.yml stable consumer contract
+scripts/                 runtime, gateway, MCP, and diagnostics helpers
+taskfiles/mcp.yml        MCP lifecycle and validation tasks
+hack/                    benchmark helpers
 ```
 
-Gateway image CI is owned by `.github/workflows/gateway-image.yml` and
-publishes `ghcr.io/homel-dev/llm-runtime-gateway` for trusted events.
+Gateway image CI is owned by `.github/workflows/gateway-image.yml`.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -343,15 +374,24 @@ publishes `ghcr.io/homel-dev/llm-runtime-gateway` for trusted events.
 
 ## 11. Deployment Lifecycles
 
-The root Kustomization owns the namespace, runtime contract, general
-NetworkPolicy, and three local inference tiers. Gateway, observability, and OCO
-consumer resources are separate lifecycles.
+The operator-facing lifecycles are:
 
-The operator decides which lifecycle to reconcile. Applying the root
-Kustomization does not imply Desired State for the other lifecycles.
+1. local inference and runtime contract through `task up`;
+2. LLM gateway through `task gateway:deploy`;
+3. MCP gateway through `task mcp:deploy`;
+4. observability through `task observability:deploy`;
+5. OCO consumer publication through `task oco-consumer:deploy`.
 
-Operational procedures, including validation and rollback, are defined in
-[03_operations.md](03_operations.md).
+The root Kustomization includes `small` and `large`. Medium resources remain in
+the repository but are not included in that Desired State.
+
+`task up` reapplies the authored general NetworkPolicy after the root
+Kustomization.
+
+The MCP lifecycle installs pinned Envoy Gateway and Envoy AI Gateway controller
+prerequisites before applying the runtime MCP data plane.
+
+Operational procedures are defined in [03_operations.md](03_operations.md).
 
 [Back to top](#shared-llm-runtime-model)
 

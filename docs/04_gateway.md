@@ -1,6 +1,6 @@
 # LLM Gateway
 
-*Trusted subscription-provider gateway — architecture and operations.*
+*Trusted model-routing and subscription-provider gateway — architecture and operations.*
 
 ---
 
@@ -69,20 +69,20 @@ http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 
 ## Backends
 
-The router exposes configured model IDs and routes them to trusted loopback
-backends in the same Pod.
+The router loads a model-to-backend table from runtime configuration.
 
 | Gateway model | Backend | Transport |
 | --- | --- | --- |
-| `gpt-5.6-sol` | ChatGPT/Codex subscription | Stateful Codex Responses WebSocket transport on `127.0.0.1:10533` |
+| `llm-small` | local inference | `llm-small.llm-runtime.svc.cluster.local:8000` |
+| `llm-large` | local inference | `llm-large.llm-runtime.svc.cluster.local:8000` |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription | Stateful Codex Responses transport on `127.0.0.1:10533` |
 | `gemini-subscription-pro` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-pro-agent` on `127.0.0.1:10532` |
 | `gemini-subscription-auto` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-3.7-flash-medium` on `127.0.0.1:10532` |
 
-`gemini-subscription-auto` is retained for RR compatibility. It does not mean
-dynamic model selection.
+The medium tier is not a current gateway backend.
 
-Routing authority is constrained by the configured model table. Requests for
-unadvertised models fail rather than being forwarded to an arbitrary provider.
+The gateway rewrites local consumer aliases to the served upstream model names.
+Unknown model IDs fail rather than being forwarded to an arbitrary destination.
 
 [Back to top](#llm-gateway)
 
@@ -155,51 +155,36 @@ failure instead of consuming personal AI credits through that setting.
 
 ## Build and Verify
 
-Run repository and gateway checks before image promotion:
+Run repository and gateway checks:
 
 ```bash
 task gateway:verify
 ```
 
-Build a local Minikube image with:
+Build for the selected Minikube Docker daemon:
 
 ```bash
 task gateway:image:build
 ```
 
-The gateway image verifies the pinned `agy` artifact checksum, version, and required headless flags during image construction.
-
-### GitHub Actions image build
-
-`.github/workflows/gateway-image.yml` is the canonical remote image build for
-`homel-dev/llm-runtime`.
-
-Pull requests run verification and a full `linux/amd64` BuildKit build without
-registry write permission. `main`, `v*` tags, and manual dispatch publish to:
-
-```text
-ghcr.io/homel-dev/llm-runtime-gateway
-```
-
-Published metadata includes the full commit-SHA tag, branch or release tags,
-BuildKit provenance, and an SBOM. `main` updates `latest`.
-
-Deployments that promote a specific build use the immutable digest:
+Build in the current Docker daemon:
 
 ```bash
-LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
-  task gateway:deploy
+task gateway:image:build TARGET=docker
 ```
 
-The Deployment references `imagePullSecrets: [{name: ghcr-pull-secret}]`.
-Private GHCR packages therefore require that Secret in `llm-runtime` before
-image pull.
+The default image reference is:
 
-The Dockerfile pins Antigravity CLI `1.1.26` build `5550154686791680` by
-its official Google Storage artifact and verifies the Linux x86_64 SHA-256
-before installation. The image build also checks that the required headless CLI
-flags are present. Updating Antigravity therefore requires an explicit source
-change and produces a reviewable gateway-image diff.
+```text
+ghcr.io/homel-dev/llm-runtime-gateway:main
+```
+
+`.github/workflows/gateway-image.yml` verifies and builds pull requests without
+publishing. Trusted `main`, `v*`, and manual runs publish to
+`ghcr.io/homel-dev/llm-runtime-gateway` with provenance and SBOM metadata.
+
+The Dockerfile pins Antigravity CLI `1.1.26` build `5550154686791680` and
+verifies its Linux x86_64 SHA-256 before installation.
 
 [Back to top](#llm-gateway)
 
@@ -238,23 +223,27 @@ task gateway:deploy
 task gateway:status
 ```
 
-Validate each subscription path or every advertised gateway model end to end:
+Validate every advertised model:
 
 ```bash
-task gateway:openai:check
-task gateway:gemini:check
 task gateway:check
 ```
 
-Each check executes inside the router container and sends real OpenAI Chat
-Completions requests to `127.0.0.1:8000`. Provider-specific tasks select only
-that subscription backend; `gateway:check` discovers `/v1/models` and checks
-every advertised model across all registered backends. A check requires HTTP
-success, valid JSON, and non-empty assistant content and returns non-zero after
-reporting every failed model.
+Validate selected backend classes:
 
-A ready Deployment or successful `/v1/models` response is insufficient to
-accept provider health.
+```bash
+task gateway:check PROVIDER=openai
+task gateway:check PROVIDER=gemini
+task gateway:check PROVIDER=local
+task gateway:check PROVIDER=api
+```
+
+For `subscription`, validation proves the two-turn Codex Responses continuation
+path. Other selected backends are checked with non-streaming and streaming Chat
+Completions requests, including SSE framing and assistant content.
+
+A ready Deployment or successful `/v1/models` response is insufficient provider
+acceptance.
 
 [Back to top](#llm-gateway)
 

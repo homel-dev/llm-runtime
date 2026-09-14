@@ -4,4 +4,4 @@ resources:
   - configmap.yml
   - deployment.yml
   - service.yml
-  - networkpolicy.yaml
+  - networkpolicy.yml

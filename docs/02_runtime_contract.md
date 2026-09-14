@@ -25,7 +25,7 @@
 
 **Status:** IMPLEMENTED.
 
-**Contract version:** `v1`.
+**Contract version:** `v2`.
 
 `k8s/runtime-contract.yml`, Kubernetes Services, and the gateway's advertised
 model list are executable sources of truth for this contract.
@@ -61,18 +61,27 @@ This contract defines:
 
 ## 2. Stable Contract
 
-Stable fields in contract version `v1` are:
+Stable contract version `v2` fields are:
 
 - namespace: `llm-runtime`;
-- local Service names: `llm-small`, `llm-medium`, `llm-large`;
-- trusted gateway Service name: `llm-openai-api-gateway`;
-- service HTTP port: `8000`;
+- consumer-facing LLM Service:
+  `llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000`;
+- consumer-facing MCP base Service:
+  `llm-runtime-mcp.llm-runtime.svc.cluster.local:8000`;
+- MCP request path: `/mcp`;
 - API compatibility declaration: `openai`;
 - ConfigMap keys listed in section 8.
 
-Gateway model IDs are consumer-facing interfaces. Removing an advertised model
-ID or changing its documented meaning is a contract change even when the
-underlying provider implementation changes.
+The current active local tier aliases are:
+
+```text
+llm-small
+llm-large
+```
+
+The medium tier has no active model alias in `v2`.
+
+Gateway model IDs and public MCP capabilities are consumer-facing interfaces.
 
 [Back to top](#runtime-contract)
 
@@ -80,25 +89,25 @@ underlying provider implementation changes.
 
 ## 3. Service Endpoints
 
-### Local tiers
-
-```text
-http://llm-small.llm-runtime.svc.cluster.local:8000
-http://llm-medium.llm-runtime.svc.cluster.local:8000
-http://llm-large.llm-runtime.svc.cluster.local:8000
-```
-
-### Trusted subscription gateway
+### LLM gateway
 
 ```text
 http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 ```
 
-Consumers use Kubernetes Service discovery rather than Pod IPs.
+All `LLM_*_BASE_URL` contract keys terminate at this gateway.
 
-The gateway exposes TCP/9091 for Prometheus metrics. That port is an operations
-interface, not a general consumer API; gateway NetworkPolicy permits it only
-from runtime Prometheus.
+The upstream local Services are runtime implementation interfaces rather than
+consumer endpoints in contract version `v2`.
+
+### MCP gateway
+
+```text
+http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp
+```
+
+Consumers use the stable runtime ingress and discover public tools through MCP
+initialization and `tools/list`.
 
 [Back to top](#runtime-contract)
 
@@ -147,12 +156,14 @@ Current gateway model IDs are:
 
 | Consumer model ID | Current trusted implementation |
 | --- | --- |
-| `gpt-5.6-sol` | ChatGPT/Codex subscription through the stateful Codex Responses transport |
-| `gemini-subscription-pro` | Antigravity model `gemini-3.1-pro-high` |
-| `gemini-subscription-auto` | Antigravity model `gemini-3.7-flash-medium` |
+| `llm-small` | local `Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` through the gateway |
+| `llm-large` | local `Qwen2.5-72B-Instruct-AWQ` through the gateway |
+| `gpt-5.6-sol` | ChatGPT/Codex subscription through the stateful Responses transport |
+| `gemini-subscription-pro` | direct Cloud Code Assist transport using `gemini-pro-agent` |
+| `gemini-subscription-auto` | direct Cloud Code Assist transport using `gemini-3.7-flash-medium` |
 
-`gemini-subscription-auto` is a compatibility alias. Its current implementation
-is pinned and does not promise provider-side automatic model selection.
+`gemini-subscription-auto` is a compatibility alias. It does not promise
+provider-side automatic model selection.
 
 Consumers discover Observed State through:
 
@@ -160,8 +171,25 @@ Consumers discover Observed State through:
 GET http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000/v1/models
 ```
 
-Provider credential format, OAuth state, sidecar ports, and Antigravity settings
-are outside the consumer contract.
+Provider credential format, OAuth state, local upstream addresses, and
+provider wire details are outside the consumer contract.
+
+The MCP route currently allowlists:
+
+```text
+memory.retrieve_context
+memory.reference.search
+memory.reference.get
+```
+
+The stable MCP URL is:
+
+```text
+http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp
+```
+
+Memory Steward retains authority over retrieval semantics, filtering, ranking,
+provenance, admission, validation, and storage.
 
 [Back to top](#runtime-contract)
 
@@ -214,13 +242,22 @@ The runtime does not decide which project role should use which model.
 `k8s/runtime-contract.yml` publishes:
 
 ```yaml
-LLM_SMALL_BASE_URL: "http://llm-small.llm-runtime.svc.cluster.local:8000"
-LLM_MEDIUM_BASE_URL: "http://llm-medium.llm-runtime.svc.cluster.local:8000"
-LLM_LARGE_BASE_URL: "http://llm-large.llm-runtime.svc.cluster.local:8000"
+LLM_SMALL_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+LLM_MEDIUM_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+LLM_LARGE_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
 LLM_GATEWAY_BASE_URL: "http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000"
+
+MCP_GATEWAY_BASE_URL: "http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000"
+MCP_GATEWAY_URL: "http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp"
+MCP_RETRIEVE_TOOL: "memory.retrieve_context"
+
+LLM_SMALL_MODEL: "llm-small"
+LLM_MEDIUM_MODEL: ""
+LLM_LARGE_MODEL: "llm-large"
+
 LLM_RUNTIME_NAMESPACE: "llm-runtime"
 LLM_API_COMPATIBILITY: "openai"
-CONTRACT_VERSION: "v1"
+CONTRACT_VERSION: "v2"
 ```
 
 A consumer may copy these values into its own configuration or read the
@@ -232,7 +269,7 @@ ConfigMap through explicitly granted RBAC. The ConfigMap is not a secret store.
 
 ## 9. Versioning and Change Rules
 
-Compatible `v1` changes include:
+Compatible `v2` changes include:
 
 - changing the concrete model behind a capacity tier;
 - changing quantization or GPU topology;
@@ -250,7 +287,7 @@ Changes that require deliberate migration include:
 - removing documented API behavior.
 
 Breaking contract changes increment `CONTRACT_VERSION`; they do not silently
-mutate `v1`.
+mutate `v2`.
 
 [Back to top](#runtime-contract)
 

@@ -71,32 +71,46 @@ that failure before applying runtime changes.
 
 ## 2. Deployment Lifecycles
 
-The repository has four independent Desired States.
-
 ### Local inference and runtime contract
-
-Deploy and observe:
 
 ```bash
 task up
 task status
 ```
 
-`task up` applies the root `k8s/` Kustomization. It includes the namespace,
-Hugging Face Secret manifest, runtime contract ConfigMap, general inference
-NetworkPolicy, and the `small`, `medium`, and `large` resources.
+The active root Desired State includes the namespace, Hugging Face Secret
+manifest, runtime contract ConfigMap, `llm-small`, and `llm-large`.
 
-It does **not** deploy the subscription gateway, Prometheus/DCGM, or OCO
-consumer ConfigMaps.
+The medium manifests remain in the repository but are not included by the root
+Kustomization. `task up` reapplies `k8s/networkpolicy.yml` after Kustomize.
 
-### Subscription gateway
+### LLM gateway
 
 ```bash
 task gateway:deploy
 task gateway:status
 ```
 
-### Runtime metrics
+### MCP gateway
+
+```bash
+task mcp:deploy
+task mcp:status
+```
+
+Delete MCP data-plane resources while preserving shared controllers:
+
+```bash
+task mcp:delete
+```
+
+Remove shared controllers only through the separately prompted task:
+
+```bash
+task mcp:controllers:delete
+```
+
+### Runtime observability
 
 ```bash
 task observability:deploy
@@ -110,14 +124,8 @@ task oco-consumer:deploy
 task oco-consumer:status
 ```
 
-Gateway telemetry and OCO publication can be reconciled together with:
-
-```bash
-task gateway:observability:deploy
-```
-
-The operator decides which lifecycle to reconcile. Applying one lifecycle does
-not imply success of another.
+The operator decides which lifecycle to reconcile. Success of one lifecycle
+does not prove success of another.
 
 [Back to top](#operations-guide)
 
@@ -125,56 +133,29 @@ not imply success of another.
 
 ## 3. Local Inference Validation
 
-List advertised models through cluster DNS:
+The active tiers are `small` and `large`.
 
 ```bash
-task llm:list-small
-task llm:list-medium
-task llm:list-large
+task llm:list TIER=small
+task llm:list TIER=large
+
+task llm:health TIER=small
+task llm:health TIER=large
+
+task llm:metrics TIER=small
+task llm:metrics TIER=large
+
+task llm:benchmark TIER=small
+task llm:benchmark TIER=large
 ```
 
-Run health checks:
+Collect the large-tier startup diagnostic when readiness does not converge:
 
 ```bash
-task llm:health-small
-task llm:health-medium
-task llm:health-large
-```
-
-Verify metrics endpoints:
-
-```bash
-task llm:metrics-small
-task llm:metrics-medium
-task llm:metrics-large
-```
-
-Run chat smoke tests:
-
-```bash
-task llm:smoke-small
-task llm:smoke-medium
-task llm:smoke-large
-```
-
-Benchmark through cluster DNS when capacity data is required:
-
-```bash
-task llm:benchmark-small
-task llm:benchmark-medium
-task llm:benchmark-large
-```
-
-Collect startup diagnostics when readiness does not converge:
-
-```bash
-task llm:diagnose-startup-small
-task llm:diagnose-startup-medium
 task llm:diagnose-startup-large
 ```
 
-A failed model listing, health check, smoke test, or required metrics check
-means the tier is not accepted as healthy.
+The Taskfile does not expose the medium tier through these operator commands.
 
 [Back to top](#operations-guide)
 
@@ -184,57 +165,45 @@ means the tier is not accepted as healthy.
 
 ### Repository verification
 
-Run:
-
 ```bash
 task gateway:verify
 ```
 
-`gateway:verify` installs the locked package dependencies with scripts disabled
-and runs the gateway package verification target, including TypeScript checks,
-build, and unit tests.
+The package verification target executes TypeScript typecheck, build, and unit
+tests.
 
-### Local Minikube image
+### Local image build
 
-Build into the selected Minikube Docker daemon:
+Build in the selected Minikube Docker daemon:
 
 ```bash
 task gateway:image:build
 ```
 
-The default image reference is `llm-runtime-gateway:dev` unless
-`LLM_GATEWAY_IMAGE` overrides it.
-
-A build in the current Docker daemon is available through:
+Build in the current Docker daemon:
 
 ```bash
-task gateway:image:build:docker
+task gateway:image:build TARGET=docker
 ```
+
+The default image reference is:
+
+```text
+ghcr.io/homel-dev/llm-runtime-gateway:main
+```
+
+Override it with `LLM_GATEWAY_IMAGE`.
 
 ### CI image
 
-GitHub Actions publishes trusted builds to:
-
-```text
-ghcr.io/homel-dev/llm-runtime-gateway
-```
-
-Promote an immutable digest emitted by the workflow:
+Promote a trusted immutable digest with:
 
 ```bash
 LLM_GATEWAY_IMAGE='ghcr.io/homel-dev/llm-runtime-gateway@sha256:<digest>' \
   task gateway:deploy
 ```
 
-The Deployment references `ghcr-pull-secret`. The Secret must exist in
-`llm-runtime` before Kubernetes can pull a private package.
-
 `gateway:deploy` reapplies `k8s/networkpolicy.yml` before gateway resources.
-This migration ordering matters because Kubernetes NetworkPolicy rules are
-additive; retaining the older broad selector would preserve unintended gateway
-ingress.
-
-Failure of image pull, rollout, or post-deploy validation stops promotion.
 
 [Back to top](#operations-guide)
 
@@ -281,48 +250,44 @@ failures.
 
 ## 6. Gateway Validation
 
-Inspect Deployment, Service, auth PVCs, and advertised models:
+Inspect and validate the LLM gateway:
 
 ```bash
 task gateway:status
-```
-
-Follow gateway containers:
-
-```bash
 task gateway:logs
-```
-
-Fetch raw gateway metrics:
-
-```bash
 task gateway:metrics
-```
-
-Run provider-specific end-to-end checks:
-
-```bash
-task gateway:openai:check
-task gateway:gemini:check
-```
-
-Run the aggregate check after deployment, restart, authentication changes, or
-rollback:
-
-```bash
 task gateway:check
 ```
 
-The check first reads `/v1/models`, then sends a real non-streaming Chat
-Completions request through the router for every advertised model selected by
-the command. It requires an HTTP success, valid JSON, and non-empty assistant
-content. Provider-specific tasks filter by the gateway-owned backend; the
-aggregate task checks every advertised model across every registered backend
-and reports all failures before returning non-zero.
+Filter model checks by backend class:
 
-A passing unit suite, ready Pod, or successful `/v1/models` response does not
-prove provider authentication, quota, or inference availability. Provider
-acceptance requires an end-to-end check.
+```bash
+task gateway:check PROVIDER=openai
+task gateway:check PROVIDER=gemini
+task gateway:check PROVIDER=local
+task gateway:check PROVIDER=api
+```
+
+The check begins with `/v1/models`. The ChatGPT/Codex path validates two-turn
+Responses continuation. Other selected backends validate non-streaming and
+streaming Chat Completions behavior.
+
+Validate the MCP gateway independently:
+
+```bash
+task mcp:status
+task mcp:check
+```
+
+When a project and query are available:
+
+```bash
+task mcp:check:retrieval PROJECT_ID='<project-id>' QUERY='<query>'
+```
+
+The MCP checker initializes a session, sends `notifications/initialized`, calls
+`tools/list`, requires all three published Memory Steward capabilities, and
+optionally invokes retrieval operations.
 
 [Back to top](#operations-guide)
 
@@ -539,15 +504,14 @@ task oco-consumer:status
 Then validate behavior:
 
 ```bash
-task llm:health-small
-task llm:health-medium
-task llm:health-large
+task llm:health TIER=small
+task llm:health TIER=large
 task gateway:check
 task observability:vllm-up
 task observability:gateway-up
 ```
 
-The root `task up` cannot recreate gateway, observability, or OCO resources
+The root `task up` cannot recreate gateway, MCP, observability, or OCO resources
 because those resources are outside the root Kustomization. If they are absent,
 reconcile their explicit lifecycles.
 

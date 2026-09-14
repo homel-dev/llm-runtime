@@ -1,69 +1,63 @@
 # LLM Runtime
 
 [![Gateway image](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml/badge.svg?branch=main)](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/homel-dev/llm-runtime?branch=main)](https://github.com/homel-dev/llm-runtime/commits/main)
 
-`llm-runtime` is the shared inference and trusted-provider infrastructure for
+`llm-runtime` is shared model-serving and trusted runtime infrastructure for
 Homel projects.
 
-Its architectural purpose is to keep model-serving capacity, provider
-transports, subscription credentials, and runtime telemetry outside consumer
-projects while exposing stable service contracts to those consumers.
+Its purpose is to keep model capacity, provider transports, credentials, MCP
+backend routing, and runtime network boundaries outside consumer projects while
+exposing stable runtime contracts to those consumers.
 
 **Status:** implemented infrastructure.
 
 ## Architectural Stance
 
-The repository owns two classes of runtime capability:
+The repository owns two runtime planes:
 
-- local inference tiers for shared model-serving capacity;
-- a trusted OpenAI-compatible gateway for subscription-backed providers.
+- an LLM plane that exposes one consumer-facing gateway for local and
+  subscription-backed models;
+- an MCP plane that exposes one controlled ingress for explicitly published
+  backend capabilities.
 
-Consumer projects depend on runtime interfaces, not on GPU placement,
-quantization, provider login mechanics, or credential storage.
-
-Provider credentials remain inside trusted runtime infrastructure. Consumer
-workloads do not receive those credentials as part of the runtime contract.
-
-## Authority Boundary
-
-`llm-runtime` decides and enforces runtime infrastructure concerns:
-
-- model-serving deployment and service discovery;
-- trusted provider transport and authentication storage;
-- runtime network boundaries;
-- runtime health and telemetry publication.
-
-Consumer projects retain authority over application behavior:
-
-- prompts and schemas;
-- workflow and role semantics;
-- tool execution;
-- retry, fallback, and budget policy;
-- persistence and correctness evaluation.
-
-If a runtime interface is unavailable, the runtime reports infrastructure
-failure. It does not reinterpret consumer intent or select a different
-application policy on the consumer's behalf.
-
-## Architecture
+Consumer projects depend on runtime interfaces rather than GPU placement,
+provider login mechanics, backend Service addresses, or credential storage.
 
 ```mermaid
 flowchart LR
     C[Consumer projects]
-    R[Local inference tiers]
-    G[Trusted subscription gateway]
-    P[Runtime telemetry]
 
-    C --> R
-    C --> G
-    R --> P
-    G --> P
+    C -->|Model API| L[LLM Gateway]
+    L --> I[Local inference]
+    L --> P[Subscription providers]
+
+    C -->|MCP| M[MCP Gateway]
+    M --> B[MCP backends]
 ```
 
-The diagram describes one boundary: consumers call shared runtime services;
-the runtime owns the infrastructure behind those services and publishes its
-Observed State through telemetry.
+## Authority Boundary
+
+`llm-runtime` decides and enforces:
+
+- model-serving deployment and runtime routing;
+- trusted provider transport and authentication storage;
+- MCP ingress, backend routing, and public capability exposure;
+- runtime network boundaries;
+- runtime telemetry publication.
+
+Consumer projects retain authority over:
+
+- prompts and schemas;
+- workflow and role semantics;
+- tool invocation policy;
+- retry, fallback, and budget policy;
+- persistence;
+- correctness and quality evaluation.
+
+Runtime failure remains infrastructure failure. The runtime does not reinterpret
+consumer intent or select an application fallback on the consumer's behalf.
 
 ## Documentation
 
@@ -71,8 +65,9 @@ Observed State through telemetry.
 - [Architecture overview](docs/01_overview.md)
 - [Runtime contract](docs/02_runtime_contract.md)
 - [Operations guide](docs/03_operations.md)
-- [Gateway architecture and operations](docs/04_gateway.md)
+- [LLM gateway architecture and operations](docs/04_gateway.md)
+- [MCP gateway architecture and operations](docs/06_mcp_service.md)
 
-Operational commands, concrete model identities, provider transports, image
-promotion, rollback, and diagnostics belong in the linked documents rather
-than in this top-level README.
+Operational commands, concrete model identities, provider transports, contract
+versioning, failure behavior, and deployment mechanics belong in the linked
+documents rather than in this top-level README.

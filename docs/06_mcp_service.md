@@ -1,5 +1,3 @@
-<a id="top" name="top"></a>
-
 # MCP Gateway — Envoy AI Gateway Integration
 
 *Controlled MCP ingress for shared runtime capabilities.*
@@ -57,7 +55,7 @@ Backend services retain authority over their own domain semantics, validation, d
 
 Executable Kubernetes configuration becomes authoritative after implementation.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -97,7 +95,7 @@ Adding another backend means changing declarative gateway configuration and netw
 
 It does not mean adding another client-visible endpoint or writing another routing integration inside `llm-runtime`.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -128,7 +126,7 @@ stable ingress
 
 It does not own backend application meaning.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -167,7 +165,7 @@ The MCP gateway is not placed in the inference request path.
 
 The LLM gateway is not placed in the MCP request path.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -217,53 +215,48 @@ interpretation of returned data
 
 **Invariant:** transport routing does not transfer domain authority to the gateway.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
 ## 5. Client Contract
 
-An MCP client depends on:
+Stable MCP base endpoint:
 
 ```text
-one MCP endpoint
-+ MCP protocol compatibility
-+ publicly exposed capability names
-+ required client authentication when enabled
+http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000
 ```
 
-A client MUST NOT require knowledge of:
+Stable request URL:
 
 ```text
-backend Kubernetes Service names
-backend namespaces
-backend URLs
-backend ports
-backend credentials
-Envoy Backend resources
-internal routing topology
-gateway controller topology
+http://llm-runtime-mcp.llm-runtime.svc.cluster.local:8000/mcp
 ```
 
-The stable client-facing relationship is:
+The runtime validation client currently defaults to MCP protocol version:
 
 ```text
-Client -> MCP Gateway
+2025-06-18
 ```
 
-not:
+A client depends on the runtime MCP endpoint, supported protocol behavior, and
+capabilities returned by `tools/list`.
+
+A client must not require backend Service names, namespaces, URLs, ports,
+credentials, Envoy Backend resources, routing topology, or controller topology.
+
+Current Envoy AI Gateway controller configuration maps optional request headers:
 
 ```text
-Client -> Memory Steward
-Client -> Backend 2
-Client -> Backend 3
+x-project-id   -> project.id
+x-run-id       -> run.id
+x-objective-id -> objective.id
+x-agent-role   -> agent.role
 ```
 
-Consumer-specific execution metadata such as `project_id`, `run_id`, `objective_id`, or `agent_role` MAY be transported when useful.
+Those fields are transport metadata, not universal MCP identity fields.
 
-Those fields are not universal MCP gateway identity requirements.
-
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -293,67 +286,53 @@ A newly reachable network destination does not become a publicly exposed MCP bac
 
 Backend addition requires deliberate configuration and validation.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
 ## 7. Capability Exposure
 
-Public capability exposure is **allowlist-based**.
+Public capability exposure is allowlist-based.
 
-Every backend attached to the runtime MCP ingress MUST declare an explicit tool selection policy.
-
-A backend configuration without an explicit tool allowlist is invalid for `llm-runtime`.
-
-The public contract is therefore:
+The current Memory Steward route allowlists:
 
 ```text
-backend provides capabilities
-        |
-        v
-MCPRoute explicitly selects capabilities
-        |
-        v
-client discovers selected capabilities only
+memory.retrieve_context
+memory.reference.search
+memory.reference.get
 ```
 
-Backend reachability and capability exposure are separate decisions.
+Backend reachability and public exposure are separate decisions.
 
-For example:
+A newly implemented backend tool does not become public until the runtime
+`MCPRoute` is changed deliberately.
 
-```text
-Memory Steward backend provides:
-    memory.retrieve_context
-    memory.operation_b
-    memory.operation_c
+Clients use `tools/list` to discover the public multiplexed names exposed by
+Envoy AI Gateway. They must not guess a gateway-added backend prefix.
 
-Runtime MCP ingress exposes:
-    memory.retrieve_context
-```
+Capability filtering remains declarative Envoy configuration.
 
-The runtime MUST NOT treat backend discovery as authority to publish all backend tools.
-
-Capability filtering belongs in declarative Envoy configuration.
-
-It MUST NOT be duplicated in a custom `llm-runtime` registry service.
-
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
 ## 8. Initial Backend — Memory Steward
 
-The first MCP backend is Memory Steward.
+The first backend is Memory Steward.
 
-The initial backend capability is:
+Current backend destination:
+
+```text
+memory-steward-mcp.ms.svc.cluster.local:8081
+```
+
+The current public backend capability set is:
 
 ```text
 memory.retrieve_context
+memory.reference.search
+memory.reference.get
 ```
-
-The exact public multiplexed tool name is discovered from `tools/list` and validated by `scripts/mcp-check.sh`; clients must not guess the gateway-added backend prefix.
-
-The request path is:
 
 ```mermaid
 sequenceDiagram
@@ -361,38 +340,21 @@ sequenceDiagram
     participant G as Envoy AI Gateway
     participant S as Memory Steward
 
-    C->>G: memory.retrieve_context(...)
-    G->>G: Resolve allowed tool + backend
+    C->>G: initialize
+    G-->>C: session
+    C->>G: tools/list
+    G-->>C: exposed Memory Steward capabilities
+    C->>G: tools/call(...)
     G->>S: MCP request
-    S-->>G: Structured retrieval result
-    G-->>C: MCP result
+    S-->>G: Backend result or backend error
+    G-->>C: MCP result or MCP error
 ```
 
-Memory Steward remains responsible for:
+Memory Steward remains responsible for Reference Memory, Dynamic Memory,
+retrieval semantics, metadata filtering, ranking, provenance, admission,
+validation, and storage.
 
-```text
-Reference Memory
-Dynamic Memory
-retrieval semantics
-metadata filtering
-ranking
-provenance
-admission
-Memory Steward validation
-storage
-```
-
-Envoy AI Gateway does not reproduce those behaviors.
-
-For example, a future change to Reference Memory filtering requires a Memory Steward change.
-
-It does not require implementing the filtering logic in the gateway.
-
-The gateway may validate protocol and routing requirements.
-
-It MUST NOT independently reinterpret Memory Steward domain semantics.
-
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -440,7 +402,7 @@ Arbitrary dynamic destination resolution MUST NOT be enabled as a substitute for
 
 Public Internet exposure is not implied by this architecture.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -453,33 +415,25 @@ Client -> MCP Gateway
 MCP Gateway -> Backend
 ```
 
-These MUST NOT be conflated.
+The current deployment relies on its Kubernetes network boundary rather than
+production user authentication at the MCP ingress.
 
-### Client authentication
+Backend credentials, when required, remain behind the gateway.
 
-The first deployment MAY operate inside a trusted Kubernetes network boundary without production user authentication.
+Envoy AI Gateway session encryption uses Kubernetes Secret:
 
-The architecture must preserve the ability to enforce client authentication at the gateway later.
+```text
+llm-runtime-mcp-session
+```
 
-Client authentication must not require redesigning backend services.
+`task mcp:controllers:deploy` creates the Secret when absent, generates a random
+32-byte hex seed with `openssl`, and passes the seed into the Envoy AI Gateway
+Helm release.
 
-### Backend authentication
+The seed is runtime infrastructure state, not a client credential or public
+runtime-contract value.
 
-Backend credentials belong to the gateway/backend boundary.
-
-They MUST NOT be distributed to MCP clients.
-
-Where backend authentication is required, credentials SHOULD be attached through supported gateway security policy and Kubernetes Secret mechanisms.
-
-Credentials MUST NOT be embedded into client configuration or public MCP discovery.
-
-### Authorization
-
-Network reachability alone does not imply unrestricted capability authority.
-
-Public capabilities remain bounded by the configured MCP exposure policy even before full identity-aware authorization is introduced.
-
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -528,79 +482,73 @@ Exact metric names are implementation details and MUST be validated against the 
 
 The architecture does not create a second custom metrics implementation when upstream telemetry already provides the required signal.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
 ## 12. Deployment and Configuration
 
-Envoy AI Gateway is deployed as a separately reconcilable runtime lifecycle.
-
-The `llm-runtime` repository owns:
+Pinned defaults are defined in `taskfiles/mcp.yml`:
 
 ```text
-version pins
-Helm or manifest configuration
-Gateway configuration
-MCPRoute resources
-Backend resources where required
-security policy
-NetworkPolicy
-observability integration
-validation tooling
+Envoy Gateway:    v1.8.1
+Envoy AI Gateway: v1.0.0
 ```
 
-Configuration is declarative.
+Deploy with:
 
-Changing public MCP capability exposure MUST NOT require rebuilding a custom gateway image.
-
-The desired structure is conceptually:
-
-```text
-k8s/
-  mcp/
-    gateway/
-    routes/
-    backends/
-    policy/
-    network/
-    observability/
+```bash
+task mcp:deploy
 ```
 
-The exact file layout is an implementation decision.
+The task installs pinned controller prerequisites, creates or reuses the MCP
+session-encryption Secret, reconciles the observability prerequisites required
+by the task, applies `k8s/mcp`, waits for the Gateway to become Programmed, and
+waits for the proxy Pod to become Ready.
 
-The selected Envoy AI Gateway and Envoy Gateway versions MUST be pinned.
+Runtime MCP configuration is declarative under `k8s/mcp/`.
 
-`latest` or otherwise floating production dependencies are not accepted Desired State.
+Changing public capability exposure does not require rebuilding the LLM gateway
+image.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
 ## 13. Validation and Acceptance
 
-Deployment success is not equivalent to MCP acceptance.
+Run:
 
-The implementation is accepted only when end-to-end validation proves the intended contract.
+```bash
+task mcp:check
+```
 
-At minimum, validation MUST establish:
+The automated check currently proves:
 
-1. the MCP ingress is reachable from an approved consumer;
-2. the client can complete MCP initialization;
-3. capability discovery succeeds;
-4. `memory.retrieve_context` is exposed;
-5. non-allowlisted Memory Steward capabilities are not exposed;
-6. `memory.retrieve_context` reaches Memory Steward and returns a valid result;
-7. an unknown tool remains a failure;
-8. an unavailable Memory Steward backend remains a failure;
-9. direct consumer access to Memory Steward is not accidentally introduced by the MCP deployment;
-10. required gateway telemetry is visible;
-11. required trace propagation works where configured;
-12. NetworkPolicy permits required paths and rejects unintended paths.
+1. MCP initialization completes through the runtime ingress;
+2. a session ID is returned;
+3. `notifications/initialized` is accepted;
+4. `tools/list` succeeds;
+5. `memory.retrieve_context` is visible;
+6. `memory.reference.search` is visible;
+7. `memory.reference.get` is visible.
 
-A ready Pod or accepted Kubernetes resource alone is insufficient.
+With `PROJECT_ID` and `QUERY`, the script also invokes retrieval and reference
+search. With `REFERENCE_CHUNK_ID`, it can invoke reference get.
 
-[Back to top](#top)
+Operator convenience for retrieval is:
+
+```bash
+task mcp:check:retrieval PROJECT_ID='<project-id>' QUERY='<query>'
+```
+
+The current automated script does not prove every architecture invariant.
+Routing, NetworkPolicy, controller-version, failure-path, and telemetry changes
+require validation of the affected boundary.
+
+A ready Pod, accepted CRD, or Programmed Gateway alone is insufficient.
+
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -644,7 +592,7 @@ Backend business errors remain backend-owned.
 
 Transport and routing failures remain gateway-visible.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -678,7 +626,7 @@ The runtime MUST NOT infer compatibility solely from an upstream release number.
 
 Breaking upstream behavior requires explicit migration or rollback.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -709,7 +657,7 @@ Envoy configuration determines exposure and transport policy.
 
 Backends determine domain behavior.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -729,7 +677,7 @@ Backend and MCP protocol compatibility can change independently. Version pinning
 
 Cross-namespace backend topology must not be assumed to work through arbitrary direct route references. Backend addressing must use a topology supported and tested by the pinned Envoy release.
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
@@ -816,7 +764,7 @@ domain semantics
 + correctness
 ```
 
-[Back to top](#top)
+[Back to top](#mcp-gateway--envoy-ai-gateway-integration)
 
 ---
 
