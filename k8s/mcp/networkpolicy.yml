@@ -55,6 +55,14 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Envoy data plane must reach the Envoy Gateway xDS control plane.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-runtime
+      ports:
+        - protocol: TCP
+          port: 18000
     - to:
         - namespaceSelector:
             matchLabels:
