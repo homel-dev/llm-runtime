@@ -21,6 +21,9 @@ spec:
             matchLabels:
               gateway.envoyproxy.io/owning-gateway-namespace: llm-runtime
               gateway.envoyproxy.io/owning-gateway-name: llm-runtime-mcp
+        - podSelector:
+            matchLabels:
+              app: memory-router
       ports:
         - protocol: TCP
           port: 8081
