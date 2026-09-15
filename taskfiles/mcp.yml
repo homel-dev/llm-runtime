@@ -118,9 +118,23 @@ tasks:
       - kubectl -n llm-runtime rollout status deployment/loki --timeout=180s
       - kubectl -n llm-runtime rollout restart deployment/otel-collector
       - kubectl -n llm-runtime rollout status deployment/otel-collector --timeout=180s
-      - ./scripts/kcurl.sh llm-runtime http://otel-collector.llm-runtime.svc.cluster.local:8889/metrics --connect-timeout 5 --max-time 10 >/dev/null
       - kubectl -n llm-runtime rollout restart deployment/prometheus
       - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=180s
+      - |
+        set -euo pipefail
+        body=""
+        for attempt in $(seq 1 12); do
+          body="$(./scripts/kcurl.sh llm-runtime \
+            'http://prometheus.llm-runtime.svc.cluster.local:9090/api/v1/query?query=up%7Bjob%3D%22otel-runtime-metrics%22%7D' \
+            --connect-timeout 5 --max-time 10 2>/dev/null || true)"
+          if printf '%s\n' "${body}" | grep -Eq '"value":\[[^]]*,"1"\]'; then
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "otel-runtime-metrics Prometheus target did not become healthy" >&2
+        printf '%s\n' "${body}" >&2
+        exit 1
       - kubectl apply -k k8s/oco-consumer
 
   observability:delete:
