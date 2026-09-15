@@ -95,7 +95,7 @@ kubectl -n "${namespace}" exec "${name}" -- sh -eu -c '
       --data "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"${reference_search_tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"query\":\"${payload}\"}}}"
     cat /tmp/reference-search.out
     echo
-    if grep -Eq '\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:' /tmp/reference-search.out; then
+    if grep -Eq "\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:" /tmp/reference-search.out; then
       echo "memory.reference.search returned an MCP error" >&2
       exit 1
     fi
@@ -111,7 +111,7 @@ kubectl -n "${namespace}" exec "${name}" -- sh -eu -c '
       --data "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"${reference_get_tool}\",\"arguments\":{\"project_id\":\"${project_id}\",\"chunk_id\":\"${reference_chunk_id}\"}}}"
     cat /tmp/reference-get.out
     echo
-    if grep -Eq '\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:' /tmp/reference-get.out; then
+    if grep -Eq "\"isError\"[[:space:]]*:[[:space:]]*true|\"error\"[[:space:]]*:" /tmp/reference-get.out; then
       echo "memory.reference.get returned an MCP error" >&2
       exit 1
     fi

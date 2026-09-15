@@ -33,7 +33,7 @@ tasks:
           --version {{.ENVOY_GATEWAY_VERSION}} \
           --namespace llm-runtime \
           --skip-crds \
-          --set config.envoyGateway.extensionApis.enableBackend=true
+          --values k8s/mcp/envoy-gateway-values.yml
         kubectl wait --timeout=180s -n llm-runtime \
           deployment/envoy-gateway --for=condition=Available
       - |
