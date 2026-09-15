@@ -32,6 +32,8 @@ data:
       batch: {}
 
     exporters:
+      prometheus/runtime:
+        endpoint: "0.0.0.0:8889"
       otlphttp/tempo:
         endpoint: "http://tempo.llm-runtime.svc.cluster.local:4318"
       otlphttp/loki:
@@ -50,6 +52,10 @@ data:
                     without_type_suffix: true
                     without_units: true
       pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, batch]
+          exporters: [prometheus/runtime]
         traces:
           receivers: [otlp]
           processors: [memory_limiter, resource, batch]

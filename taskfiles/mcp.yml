@@ -2,7 +2,7 @@ version: "3"
 
 vars:
   ENVOY_GATEWAY_VERSION: '{{.ENVOY_GATEWAY_VERSION | default "v1.8.1"}}'
-  ENVOY_AI_GATEWAY_VERSION: '{{.ENVOY_AI_GATEWAY_VERSION | default "v1.0.0"}}'
+  ENVOY_AI_GATEWAY_VERSION: '{{.ENVOY_AI_GATEWAY_VERSION | default "v1.1.0"}}'
 
 tasks:
   controllers:deploy:
@@ -116,7 +116,9 @@ tasks:
       - kubectl -n llm-runtime delete networkpolicy allow-observability-console-traces-logs allow-otel-ingress --ignore-not-found=true
       - kubectl -n llm-runtime rollout status deployment/tempo --timeout=180s
       - kubectl -n llm-runtime rollout status deployment/loki --timeout=180s
+      - kubectl -n llm-runtime rollout restart deployment/otel-collector
       - kubectl -n llm-runtime rollout status deployment/otel-collector --timeout=180s
+      - ./scripts/kcurl.sh llm-runtime http://otel-collector.llm-runtime.svc.cluster.local:8889/metrics --connect-timeout 5 --max-time 10 >/dev/null
       - kubectl -n llm-runtime rollout restart deployment/prometheus
       - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=180s
       - kubectl apply -k k8s/oco-consumer
