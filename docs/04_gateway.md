@@ -11,6 +11,7 @@
 - [Backends](#backends)
 - [Codex Subscription Transport](#codex-subscription-transport)
 - [Gemini Subscription Transport](#gemini-subscription-transport)
+- [Z.AI Coding Plan Transport](#zai-coding-plan-transport)
 - [Build and Verify](#build-and-verify)
 - [Authenticate Google AI Subscription](#authenticate-google-ai-subscription)
 - [Deploy and Smoke-Test](#deploy-and-smoke-test)
@@ -78,6 +79,8 @@ The router loads a model-to-backend table from runtime configuration.
 | `gpt-5.6-sol` | ChatGPT/Codex subscription | Stateful Codex Responses transport on `127.0.0.1:10533` |
 | `gemini-subscription-pro` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-pro-agent` on `127.0.0.1:10532` |
 | `gemini-subscription-auto` | Google AI subscription | Direct Cloud Code Assist HTTP, wire model `gemini-3.7-flash-medium` on `127.0.0.1:10532` |
+| `glm-5.3` | Z.AI Coding Plan | Direct HTTPS to `api.z.ai/api/coding/paas/v4`, native Pi/Z.AI Chat Completions |
+| `glm-5.3-flash` | Z.AI Coding Plan | Direct HTTPS to `api.z.ai/api/coding/paas/v4`, native Pi/Z.AI Chat Completions |
 
 The medium tier is not a current gateway backend.
 
@@ -152,6 +155,41 @@ failure instead of consuming personal AI credits through that setting.
 [Back to top](#llm-gateway)
 
 ---
+
+## Z.AI Coding Plan Transport
+
+Z.AI Coding Plan is a direct HTTPS backend owned by the gateway. It is not a
+protocol adapter and does not invoke a Z.AI CLI. Pi keeps its native Z.AI
+OpenAI-Completions behavior, including Z.AI thinking and tool-stream fields,
+while the gateway strips caller credentials and injects the gateway-owned
+Coding Plan API key.
+
+The trusted upstream is `api.z.ai:443`. Gateway requests for
+`/v1/chat/completions` are rewritten to the Coding Plan endpoint
+`/api/coding/paas/v4/chat/completions`. The backend intentionally rejects
+`/v1/responses`.
+
+Default advertised Coding Plan models are:
+
+- `glm-5.3`
+- `glm-5.3-flash`
+
+The list is configured through `GATEWAY_ZAI_MODELS`; `GATEWAY_ZAI_MODEL_MAP`
+may be used for trusted aliases without changing client configuration.
+
+Create or rotate the Kubernetes Secret from the shell without committing the
+credential:
+
+```bash
+ZAI_API_KEY='...' task gateway:zai:secret
+```
+
+Then deploy and verify only the Z.AI models:
+
+```bash
+task gateway:deploy
+task gateway:check PROVIDER=zai
+```
 
 ## Build and Verify
 

@@ -237,6 +237,19 @@ The helper uses PVC `rr-gemini-subscription-auth`, executes interactive
 Antigravity account authentication, and then runs a non-interactive
 `gemini-3.1-pro-high` verification prompt against cached account state.
 
+### Z.AI Coding Plan
+
+Z.AI Coding Plan uses an API key rather than an interactive login flow. Create
+or rotate the gateway-owned Secret from the operator shell:
+
+```bash
+ZAI_API_KEY='...' task gateway:zai:secret
+```
+
+The Deployment reads Secret `rr-zai-coding`, key `api-key`. The credential is
+never exposed to RR/Pi agent Pods. After rotation, redeploy or restart the
+gateway and run the Z.AI-specific end-to-end check.
+
 The legacy `rr-*` PVC names preserve credential state across ownership
 migration; they are runtime-owned resources.
 
@@ -264,6 +277,7 @@ Filter model checks by backend class:
 ```bash
 task gateway:check PROVIDER=openai
 task gateway:check PROVIDER=gemini
+task gateway:check PROVIDER=zai
 task gateway:check PROVIDER=local
 task gateway:check PROVIDER=api
 ```

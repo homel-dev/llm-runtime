@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 selector="${1:-all}"
 mode="${2:-check}"
-case "$mode" in check|list) ;; *) echo "usage: $0 <all|openai|gemini|local|small|medium|large|api|model:ID> [check|list]" >&2; exit 2;; esac
+case "$mode" in check|list) ;; *) echo "usage: $0 <all|openai|gemini|zai|local|small|medium|large|api|model:ID> [check|list]" >&2; exit 2;; esac
 namespace="${LLM_RUNTIME_NAMESPACE:-llm-runtime}"
 deployment="${LLM_GATEWAY_DEPLOYMENT:-llm-openai-api-gateway}"
 timeout_ms="${LLM_GATEWAY_CHECK_TIMEOUT_MS:-210000}"
@@ -41,6 +41,7 @@ function selected(entry) {
   if (selector === "all") return true;
   if (selector === "openai") return owner === "llm-runtime-subscription";
   if (selector === "gemini") return owner === "llm-runtime-gemini-subscription";
+  if (selector === "zai") return owner === "llm-runtime-zai-coding";
   if (selector === "api") return owner === "llm-runtime-api";
   if (selector === "local") return owner.startsWith("llm-runtime-local-");
   if (["small", "medium", "large"].includes(selector)) return owner === `llm-runtime-local-${selector}`;

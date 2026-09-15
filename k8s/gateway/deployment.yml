@@ -74,6 +74,14 @@ spec:
             - { name: GATEWAY_GEMINI_MODELS, value: "gemini-subscription-pro,gemini-subscription-auto" }
             - { name: GATEWAY_GEMINI_HOST, value: "127.0.0.1" }
             - { name: GATEWAY_GEMINI_PORT, value: "10532" }
+            - { name: GATEWAY_ZAI_MODELS, value: "glm-5.3,glm-5.3-flash" }
+            - { name: GATEWAY_ZAI_HOST, value: "api.z.ai" }
+            - { name: GATEWAY_ZAI_PORT, value: "443" }
+            - name: GATEWAY_ZAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rr-zai-coding
+                  key: api-key
             - { name: GATEWAY_LOCAL_SMALL_MODELS, value: "llm-small" }
             - { name: GATEWAY_LOCAL_SMALL_MODEL_MAP, value: "llm-small=Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M" }
             - { name: GATEWAY_LOCAL_SMALL_HOST, value: "llm-small.llm-runtime.svc.cluster.local" }

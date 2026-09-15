@@ -25,10 +25,16 @@ const geminiBackend: GatewayBackend = {
   id: "gemini-subscription", protocol: "http", host: "127.0.0.1", port: 10532,
   models: ["gemini-subscription-pro"],
 };
+const zaiBackend: GatewayBackend = {
+  id: "zai-coding", protocol: "https", host: "api.z.ai", port: 443,
+  models: ["glm-5.3"], apiKey: "zai-secret",
+  pathPrefix: "/api/coding/paas/v4",
+  allowedPaths: ["/v1/chat/completions"],
+};
 const base: GatewayConfig = {
   listenPort: 0, metricsPort: 0, maxBodyBytes: 1024, upstreamTimeoutMs: 1000,
   allowedEndpoints: ["/v1/chat/completions", "/v1/responses", "/v1/models"],
-  maxOutputTokens: 4096, backends: [apiBackend, subscriptionBackend, geminiBackend],
+  maxOutputTokens: 4096, backends: [apiBackend, subscriptionBackend, geminiBackend, zaiBackend],
 };
 
 test("config permits subscription-only operation and validates backend boundaries", () => {
@@ -46,6 +52,20 @@ test("config permits subscription-only operation and validates backend boundarie
   assert.equal(geminiOnly.backends[0]!.port, 10532);
   assert.throws(() => loadGatewayConfigFromEnv({ GATEWAY_GEMINI_MODELS: "g", GATEWAY_GEMINI_HOST: "evil.example.com" }), /must be loopback/);
   assert.throws(() => loadGatewayConfigFromEnv({ GATEWAY_SUBSCRIPTION_MODELS: "same", GATEWAY_GEMINI_MODELS: "same" }), /multiple gateway backends/);
+  assert.throws(() => loadGatewayConfigFromEnv({ GATEWAY_ZAI_MODELS: "glm-5.3" }), /GATEWAY_ZAI_API_KEY is required/);
+  const zaiOnly = loadGatewayConfigFromEnv({
+    GATEWAY_ZAI_MODELS: "glm-5.3,glm-5.3-flash",
+    GATEWAY_ZAI_API_KEY: "secret",
+  });
+  assert.equal(zaiOnly.backends[0]!.id, "zai-coding");
+  assert.equal(zaiOnly.backends[0]!.host, "api.z.ai");
+  assert.equal(zaiOnly.backends[0]!.pathPrefix, "/api/coding/paas/v4");
+  assert.deepEqual(zaiOnly.backends[0]!.allowedPaths, ["/v1/chat/completions"]);
+  assert.throws(() => loadGatewayConfigFromEnv({
+    GATEWAY_ZAI_MODELS: "same",
+    GATEWAY_ZAI_API_KEY: "secret",
+    GATEWAY_GEMINI_MODELS: "same",
+  }), /multiple gateway backends/);
 });
 
 test("api backend strips inbound credentials and injects only the gateway key", () => {
@@ -78,6 +98,20 @@ test("body policy selects only configured models and clamps output token fields"
   assert.equal(backendForModel(base, "gpt-sub")?.id, "subscription");
   assert.equal(backendForModel(base, "gpt-api")?.id, "api");
   assert.equal(backendForModel(base, "gemini-subscription-pro")?.id, "gemini-subscription");
+  assert.equal(backendForModel(base, "glm-5.3")?.id, "zai-coding");
+});
+
+test("Z.AI backend injects only the gateway key and preserves Pi user-agent", () => {
+  const out = sanitizeRequestHeaders({
+    authorization: "Bearer client-token",
+    "x-api-key": "client-key",
+    "content-type": "application/json",
+    "user-agent": "pi/0.52.0",
+  }, zaiBackend);
+  assert.equal(out.authorization, "Bearer zai-secret");
+  assert.equal("x-api-key" in out, false);
+  assert.equal(out["user-agent"], "pi/0.52.0");
+  assert.equal(out.host, "api.z.ai");
 });
 
 interface Captured { backend: GatewayBackend; options: any; body: string; }
@@ -110,6 +144,39 @@ function callServer(port: number, path: string, headers: Record<string, string>,
   });
 }
 
+test("Z.AI Coding Plan route rewrites only the trusted base path and preserves native payload", async () => {
+  const captured: Captured[] = [];
+  const server = createGateway(base, fakeRequester(captured));
+  server.listen(0); await once(server, "listening");
+  const port = (server.address() as AddressInfo).port;
+  try {
+    const payload = {
+      model: "glm-5.3",
+      messages: [{ role: "user", content: "test" }],
+      thinking: { type: "enabled" },
+      max_tokens: 64,
+    };
+    const result = await callServer(port, "/v1/chat/completions?trace=1", {
+      authorization: "Bearer CLIENT",
+      "content-type": "application/json",
+      "user-agent": "pi/test",
+    }, JSON.stringify(payload));
+    assert.equal(result.status, 200);
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0]!.backend.id, "zai-coding");
+    assert.equal(captured[0]!.options.path, "/api/coding/paas/v4/chat/completions?trace=1");
+    assert.equal(captured[0]!.options.headers.authorization, "Bearer zai-secret");
+    assert.equal(captured[0]!.options.headers["user-agent"], "pi/test");
+    assert.deepEqual(JSON.parse(captured[0]!.body).thinking, { type: "enabled" });
+
+    const rejected = await callServer(port, "/v1/responses", {
+      "content-type": "application/json",
+    }, JSON.stringify({ model: "glm-5.3", input: "test" }));
+    assert.equal(rejected.status, 404);
+    assert.equal(captured.length, 1);
+  } finally { server.close(); }
+});
+
 test("router sends API, OpenAI subscription, and Gemini subscription models to different trusted backends", async () => {
   const captured: Captured[] = [];
   const server = createGateway(base, fakeRequester(captured));
@@ -140,7 +207,7 @@ test("/v1/models is generated by the router and does not call an upstream", asyn
     const res = await callServer(port, "/v1/models", {}, "", "GET");
     assert.equal(res.status, 200);
     const ids = JSON.parse(res.body).data.map((m: { id: string }) => m.id).sort();
-    assert.deepEqual(ids, ["gemini-subscription-pro", "gpt-api", "gpt-sub"]);
+    assert.deepEqual(ids, ["gemini-subscription-pro", "glm-5.3", "gpt-api", "gpt-sub"]);
     assert.equal(captured.length, 0);
   } finally { server.close(); }
 });
@@ -204,6 +271,17 @@ test("output-token policy preserves lower client limits and normalizes to backen
   assert.equal(geminiBody.max_completion_tokens, 32);
   assert.equal(geminiBody.max_tokens, undefined);
   assert.equal(geminiBody.max_output_tokens, undefined);
+
+  const zai = applyBodyPolicy("/v1/chat/completions", Buffer.from(JSON.stringify({
+    model: "glm-5.3",
+    max_completion_tokens: 48,
+    thinking: { type: "enabled" },
+  })), base);
+  assert.equal(zai.ok, true);
+  const zaiBody = JSON.parse(zai.body.toString());
+  assert.equal(zaiBody.max_tokens, 48);
+  assert.equal(zaiBody.max_completion_tokens, undefined);
+  assert.deepEqual(zaiBody.thinking, { type: "enabled" });
 
   const apiResponses = applyBodyPolicy("/v1/responses", Buffer.from(JSON.stringify({ model: "gpt-api", max_completion_tokens: 12 })), base);
   assert.equal(apiResponses.ok, true);

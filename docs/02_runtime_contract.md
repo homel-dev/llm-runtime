@@ -161,6 +161,8 @@ Current gateway model IDs are:
 | `gpt-5.6-sol` | ChatGPT/Codex subscription through the stateful Responses transport |
 | `gemini-subscription-pro` | direct Cloud Code Assist transport using `gemini-pro-agent` |
 | `gemini-subscription-auto` | direct Cloud Code Assist transport using `gemini-3.7-flash-medium` |
+| `glm-5.3` | Z.AI Coding Plan through native Pi-compatible Chat Completions |
+| `glm-5.3-flash` | Z.AI Coding Plan through native Pi-compatible Chat Completions |
 
 `gemini-subscription-auto` is a compatibility alias. It does not promise
 provider-side automatic model selection.

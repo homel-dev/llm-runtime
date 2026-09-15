@@ -147,7 +147,7 @@ tasks:
   gateway:status:
     desc: Show gateway deployment, Service, auth PVCs, and current advertised models
     cmds:
-      - kubectl -n llm-runtime get deployment/llm-openai-api-gateway service/llm-openai-api-gateway pvc/rr-openai-subscription-auth pvc/rr-gemini-subscription-auth
+      - kubectl -n llm-runtime get deployment/llm-openai-api-gateway service/llm-openai-api-gateway pvc/rr-openai-subscription-auth pvc/rr-gemini-subscription-auth secret/rr-zai-coding
       - kubectl -n llm-runtime exec deployment/llm-openai-api-gateway -c gateway -- node -e 'fetch("http://127.0.0.1:8000/v1/models").then(async r=>{const t=await r.text(); console.log(t); if(!r.ok)process.exit(1)})'
 
   gateway:logs:
@@ -178,14 +178,23 @@ tasks:
     cmds:
       - LLM_GATEWAY_IMAGE='{{.GATEWAY_IMAGE}}' ./scripts/gateway-gemini-subscription-login.sh
 
+  gateway:zai:secret:
+    desc: Create or update the Z.AI Coding Plan API-key Secret from ZAI_API_KEY
+    cmds:
+      - |
+        test -n "${ZAI_API_KEY:-}" || { echo "ZAI_API_KEY is required" >&2; exit 2; }
+        kubectl -n llm-runtime create secret generic rr-zai-coding \
+          --from-literal=api-key="$ZAI_API_KEY" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
   gateway:check:
-    desc: End-to-end check advertised gateway models (PROVIDER=all|openai|gemini|local|api, default all)
+    desc: End-to-end check advertised gateway models (PROVIDER=all|openai|gemini|zai|local|api, default all)
     vars:
       PROVIDER: '{{.PROVIDER | default "all"}}'
     requires:
       vars:
         - name: PROVIDER
-          enum: [all, openai, gemini, local, api]
+          enum: [all, openai, gemini, zai, local, api]
     cmds:
       - ./scripts/gateway-check-models.sh {{.PROVIDER}}
 

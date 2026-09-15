@@ -18,10 +18,12 @@ import { checkSubscriptionResponseOutputBudget, checkSubscriptionStreamOutputBud
  *    ChatGPT OAuth session, WebSocket continuation, and refresh lifecycle;
  *  - gemini-subscription: loopback Antigravity adapter. The adapter invokes Google Antigravity CLI
  *    using a cached Google-account subscription session;
+ *  - zai-coding: direct Z.AI Coding Plan HTTPS transport. The gateway owns the
+ *    Coding Plan API key and preserves Pi's native Z.AI Chat Completions payload;
  *  - local-small/local-medium/local-large: trusted in-cluster OpenAI-compatible
  *    model servers. Consumers never receive these upstream Service addresses.
  */
-export type GatewayBackendId = "api" | "subscription" | "gemini-subscription" | "local-small" | "local-medium" | "local-large";
+export type GatewayBackendId = "api" | "subscription" | "gemini-subscription" | "zai-coding" | "local-small" | "local-medium" | "local-large";
 
 export interface GatewayBackend {
   id: GatewayBackendId;
@@ -31,6 +33,8 @@ export interface GatewayBackend {
   models: string[];
   apiKey?: string;
   modelMap?: Record<string, string>;
+  pathPrefix?: string;
+  allowedPaths?: string[];
 }
 
 export interface GatewayConfig {
@@ -118,9 +122,15 @@ export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
   const apiModels = csvEnv(env.GATEWAY_API_MODELS ?? env.GATEWAY_ALLOWED_MODELS, []);
   const subscriptionModels = csvEnv(env.GATEWAY_SUBSCRIPTION_MODELS, []);
   const geminiModels = csvEnv(env.GATEWAY_GEMINI_MODELS, []);
+  const zaiModels = csvEnv(env.GATEWAY_ZAI_MODELS, []);
   const localBackends = LOCAL_TIERS.map((tier) => localBackendFromEnv(env, tier)).filter((backend): backend is GatewayBackend => backend !== undefined);
   const assignments = new Map<string, string[]>();
-  for (const [backend, models] of [["api", apiModels], ["subscription", subscriptionModels], ["gemini-subscription", geminiModels]] as const) {
+  for (const [backend, models] of [
+    ["api", apiModels],
+    ["subscription", subscriptionModels],
+    ["gemini-subscription", geminiModels],
+    ["zai-coding", zaiModels],
+  ] as const) {
     for (const model of models) assignments.set(model, [...(assignments.get(model) ?? []), backend]);
   }
   for (const backend of localBackends) {
@@ -168,8 +178,23 @@ export function loadGatewayConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
       models: geminiModels,
     });
   }
+  if (zaiModels.length) {
+    const apiKey = env.GATEWAY_ZAI_API_KEY;
+    if (!apiKey) throw new Error("GATEWAY_ZAI_API_KEY is required when GATEWAY_ZAI_MODELS is non-empty");
+    backends.push({
+      id: "zai-coding",
+      protocol: "https",
+      host: validDnsHost("GATEWAY_ZAI_HOST", env.GATEWAY_ZAI_HOST ?? "api.z.ai"),
+      port: validPort("GATEWAY_ZAI_PORT", Number(env.GATEWAY_ZAI_PORT ?? "443")),
+      models: zaiModels,
+      apiKey,
+      modelMap: modelMapFromEnv("GATEWAY_ZAI_MODEL_MAP", env.GATEWAY_ZAI_MODEL_MAP, zaiModels),
+      pathPrefix: "/api/coding/paas/v4",
+      allowedPaths: ["/v1/chat/completions"],
+    });
+  }
   backends.push(...localBackends);
-  if (!backends.length) throw new Error("at least one gateway backend must be configured via API, subscription, Gemini, or GATEWAY_LOCAL_<TIER>_MODELS");
+  if (!backends.length) throw new Error("at least one gateway backend must be configured via API, subscription, Gemini, Z.AI Coding Plan, or GATEWAY_LOCAL_<TIER>_MODELS");
 
   return { listenPort, metricsPort, maxBodyBytes, upstreamTimeoutMs, allowedEndpoints, maxOutputTokens, backends };
 }
@@ -183,11 +208,13 @@ export function sanitizeRequestHeaders(
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(incoming)) {
     if (value === undefined) continue;
-    if (FORWARDABLE_REQUEST_HEADERS.has(name.toLowerCase())) headers[name.toLowerCase()] = Array.isArray(value) ? value.join(", ") : value;
+    const lower = name.toLowerCase();
+    const forward = FORWARDABLE_REQUEST_HEADERS.has(lower) || (backend.id === "zai-coding" && lower === "user-agent");
+    if (forward) headers[lower] = Array.isArray(value) ? value.join(", ") : value;
   }
-  // Client credentials are always stripped. API credentials are injected only
-  // for the API backend. Subscription auth is owned by the loopback OAuth proxy.
-  if (backend.id === "api") headers.authorization = `Bearer ${backend.apiKey}`;
+  // Client credentials are always stripped. Direct HTTPS backends receive only
+  // gateway-owned credentials; loopback subscription auth stays inside its sidecar.
+  if (backend.id === "api" || backend.id === "zai-coding") headers.authorization = `Bearer ${backend.apiKey}`;
   headers.host = backend.host;
   return headers;
 }
@@ -195,6 +222,15 @@ export function sanitizeRequestHeaders(
 function pathnameOf(url: string): string {
   const q = url.indexOf("?");
   return q === -1 ? url : url.slice(0, q);
+}
+
+function upstreamPathForBackend(backend: GatewayBackend, rawUrl: string): string {
+  if (!backend.pathPrefix) return rawUrl;
+  const q = rawUrl.indexOf("?");
+  const pathname = q === -1 ? rawUrl : rawUrl.slice(0, q);
+  const query = q === -1 ? "" : rawUrl.slice(q);
+  if (!pathname.startsWith("/v1/")) throw new Error(`cannot rewrite non-/v1 path '${pathname}' for backend ${backend.id}`);
+  return `${backend.pathPrefix}${pathname.slice(3)}${query}`;
 }
 
 export interface BodyPolicyResult {
@@ -236,7 +272,7 @@ export function applyBodyPolicy(pathname: string, body: Buffer, config: GatewayC
       parsed.max_output_tokens = outputTokenLimit;
     } else if (pathname === "/v1/chat/completions" || pathname === "/v1/completions") {
       delete parsed.max_output_tokens;
-      if (selectedBackend?.id === "subscription" || selectedBackend?.id.startsWith("local-")) {
+      if (selectedBackend?.id === "subscription" || selectedBackend?.id === "zai-coding" || selectedBackend?.id.startsWith("local-")) {
         parsed.max_tokens = outputTokenLimit;
         delete parsed.max_completion_tokens;
       } else {
@@ -431,10 +467,16 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
       if (!policy.model) { logReject(400, "model_required"); metrics.recordRejected(method, pathname, 400, "model_required"); clientRes.writeHead(400).end("model is required"); return; }
       const backend = backendForModel(config, policy.model);
       if (!backend) { logReject(403, "model_not_allowed", { model: policy.model }); metrics.recordRejected(method, pathname, 403, "model_not_allowed"); clientRes.writeHead(403).end("model not allowed"); return; }
+      if (backend.allowedPaths && !backend.allowedPaths.includes(pathname)) {
+        logReject(404, "backend_endpoint", { model: policy.model, backend: backend.id });
+        metrics.recordRejected(method, pathname, 404, "backend_endpoint");
+        clientRes.writeHead(404).end("endpoint not supported by selected backend");
+        return;
+      }
 
       const body = policy.body;
       const headers = sanitizeRequestHeaders(clientReq.headers, backend);
-      if (backend.id !== "api") headers["x-llm-gateway-request-id"] = requestId;
+      if (backend.id !== "api" && backend.id !== "zai-coding") headers["x-llm-gateway-request-id"] = requestId;
       if (body.length) headers["content-length"] = String(body.length);
       logGatewayEvent({ event: "request.start", requestId, method, path: pathname, model: policy.model, backend: backend.id, requestBytes: body.length });
       metrics.startUpstream(backend, policy.model, body.length);
@@ -443,7 +485,7 @@ export function createGateway(config: GatewayConfig, requester: UpstreamRequeste
         host: backend.host,
         port: backend.port,
         method,
-        path: rawUrl,
+        path: upstreamPathForBackend(backend, rawUrl),
         headers,
         timeout: config.upstreamTimeoutMs,
       }, (upstreamRes: IncomingMessage) => {

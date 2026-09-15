@@ -192,6 +192,8 @@ Current configured model aliases are:
 | `gpt-5.6-sol` | stateful ChatGPT/Codex Responses transport |
 | `gemini-subscription-pro` | direct Cloud Code Assist transport using `gemini-pro-agent` |
 | `gemini-subscription-auto` | direct Cloud Code Assist transport using `gemini-3.7-flash-medium` |
+| `glm-5.3` | direct Z.AI Coding Plan Chat Completions transport |
+| `glm-5.3-flash` | direct Z.AI Coding Plan Chat Completions transport |
 
 The consumer-facing MCP endpoint is:
 
