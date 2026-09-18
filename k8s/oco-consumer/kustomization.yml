@@ -7,5 +7,6 @@ resources:
   - configmap-dashboard.yml
   - configmap-gateway-dashboard.yml
   - configmap-mcp-dashboard.yml
+  - configmap-ai-runtime-overview.yml
   - role.yml
   - rolebinding.yml

@@ -28,7 +28,7 @@
 
 Executable sources of truth are the gateway source and tests under `gateway/`,
 `k8s/gateway/`, `k8s/networkpolicy.yml`, the Taskfile gateway targets, and the
-GitHub Actions image workflow.
+GitHub Actions repository CI and image workflows.
 
 `llm-runtime` has authority over provider transport, provider authentication
 storage, gateway routing for advertised model IDs, gateway network policy, and
@@ -216,6 +216,14 @@ The default image reference is:
 ```text
 ghcr.io/homel-dev/llm-runtime-gateway:main
 ```
+
+`.github/workflows/main.yml` is the repository-wide CI entry point. It invokes
+the organization repository-standards workflow for pushes and pull requests to
+`main` and for manual runs. On pushes to `main`, it also invokes the shared
+repository-context workflow and retains the generated `repository-context`
+artifact for three days. The standards workflow is pinned to a reviewed
+`homel-dev/.github` commit; the repository-context invocation follows the same
+organization-owned `@main` pattern used by Memory Steward.
 
 `.github/workflows/gateway-image.yml` verifies and builds pull requests without
 publishing. Trusted `main`, `v*`, and manual runs publish to

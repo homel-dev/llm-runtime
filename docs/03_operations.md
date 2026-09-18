@@ -172,6 +172,18 @@ task gateway:verify
 The package verification target executes TypeScript typecheck, build, and unit
 tests.
 
+Repository-wide CI is defined by `.github/workflows/main.yml`. On pushes and
+pull requests targeting `main`, and on manual dispatch, it invokes the
+organization repository-standards workflow pinned to the same reviewed
+`homel-dev/.github` commit used by Memory Steward. The reusable workflow checks
+repository policy, YAML, Bash syntax, and ShellCheck errors.
+
+On each push to `main`, the same CI workflow also invokes the organization
+repository-context workflow. It packages the exact Git revision, complete Git
+history, persisted CodeGraph state, probe output, manifest, and pinned CodeGraph
+binary as the `repository-context` artifact with three-day retention. This is
+separate from the gateway image build/publish lifecycle.
+
 ### Local image build
 
 Build in the selected Minikube Docker daemon:

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-context:
+    name: Repository context artifact
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: homel-dev/.github/.github/workflows/repository-context.yml@main
+    with:
+      retention_days: 3
+      include_codegraph_binary: true
+
+  standards:
+    name: Organization standards
+    uses: homel-dev/.github/.github/workflows/repository-ci.yml@047391f1ac3e79ce2a9c1c74ebb1f4dfc261d8c6
+    with:
+      standards_ref: 047391f1ac3e79ce2a9c1c74ebb1f4dfc261d8c6
+      enforce_numbered_docs: false

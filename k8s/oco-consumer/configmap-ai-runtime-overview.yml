@@ -1,0 +1,903 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-runtime-overview-dashboard
+  namespace: llm-runtime
+  labels:
+    grafana_dashboard: "1"
+data:
+  ai-runtime-overview.json: |-
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": false,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "LLM Gateway RPS",
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(llm_gateway_upstream_requests_total[5m])) or vector(0)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "MCP Gateway RPS",
+          "gridPos": {
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(envoy_http_downstream_rq_total{job=\"mcp-envoy\"}[5m])) or vector(0)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "MS Router ops/s",
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(memory_router_operations_total[5m])) or vector(0)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "MS MCP tools/s",
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(memory_steward_mcp_agent_tool_calls_total[5m])) or vector(0)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "stat",
+          "title": "MS retrievals \u00b7 15m",
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "postgres",
+            "uid": "memory-steward-postgres"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "postgres",
+                "uid": "memory-steward-postgres"
+              },
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT count(*)::bigint FROM telemetry.request WHERE t_begin >= now()-interval '15 minutes' AND operation IN ('context_retrieve','reference_search','reference_get')",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "LLM 5xx + transport/s",
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "targets": [
+            {
+              "expr": "(sum(rate(llm_gateway_upstream_requests_total{status_code=~\"5..\"}[5m])) + sum(rate(llm_gateway_upstream_errors_total[5m]))) or vector(0)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "text",
+          "title": "Correlation boundary",
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 24,
+            "h": 3
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "Exact **model \u2192 MCP query** correlation is not present in the current request contract. This dashboard shows LLM model traffic, MCP gateway traffic, and Memory Steward retrieval/tool activity on one timeline. Exact per-call correlation requires RR/caller propagation of a shared correlation ID and model identity into MCP request metadata."
+          }
+        },
+        {
+          "id": 100,
+          "type": "row",
+          "title": "LLM Gateway",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 7,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "id": 101,
+              "type": "timeseries",
+              "title": "Requests by backend / model",
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (backend, model, status_code) (rate(llm_gateway_upstream_requests_total[5m]))",
+                  "legendFormat": "{{backend}} \u00b7 {{model}} \u00b7 {{status_code}}",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 102,
+              "type": "timeseries",
+              "title": "Latency p95",
+              "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "histogram_quantile(0.95, sum by (le, backend, model) (rate(llm_gateway_request_duration_seconds_bucket[5m])))",
+                  "legendFormat": "{{backend}} \u00b7 {{model}}",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 103,
+              "type": "timeseries",
+              "title": "Transport errors",
+              "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (backend, model, reason) (rate(llm_gateway_upstream_errors_total[5m]))",
+                  "legendFormat": "{{backend}} \u00b7 {{model}} \u00b7 {{reason}}",
+                  "refId": "A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 200,
+          "type": "row",
+          "title": "MCP Gateway",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 8,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "id": 201,
+              "type": "timeseries",
+              "title": "HTTP request rate",
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "sum(rate(envoy_http_downstream_rq_total{job=\"mcp-envoy\"}[5m]))",
+                  "legendFormat": "requests",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 202,
+              "type": "timeseries",
+              "title": "Upstream latency p95",
+              "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "histogram_quantile(0.95, sum by (le) (rate(envoy_cluster_upstream_rq_time_bucket{job=\"mcp-envoy\"}[5m]))) / 1000",
+                  "legendFormat": "p95",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 203,
+              "type": "logs",
+              "title": "MCP Gateway access logs",
+              "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 9
+              },
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "victorialogs"
+              },
+              "targets": [
+                {
+                  "editorMode": "code",
+                  "expr": "\"service.name\":=\"llm-runtime-mcp\"",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 204,
+              "type": "traces",
+              "title": "MCP Gateway traces",
+              "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 12,
+                "h": 9
+              },
+              "datasource": {
+                "type": "tempo",
+                "uid": "tempo"
+              },
+              "targets": [
+                {
+                  "queryType": "traceql",
+                  "query": "{ resource.service.name = `llm-runtime-mcp` }",
+                  "refId": "A"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 300,
+          "type": "row",
+          "title": "Memory Steward",
+          "collapsed": true,
+          "gridPos": {
+            "x": 0,
+            "y": 9,
+            "w": 24,
+            "h": 1
+          },
+          "panels": [
+            {
+              "id": 301,
+              "type": "timeseries",
+              "title": "Router operations",
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (operation, outcome) (rate(memory_router_operations_total[5m]))",
+                  "legendFormat": "{{operation}} \u00b7 {{outcome}}",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 302,
+              "type": "timeseries",
+              "title": "Agent MCP tools",
+              "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "victoriametrics"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (tool, outcome) (rate(memory_steward_mcp_agent_tool_calls_total[5m]))",
+                  "legendFormat": "{{tool}} \u00b7 {{outcome}}",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 303,
+              "type": "timeseries",
+              "title": "Retrieval volume by operation",
+              "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "postgres",
+                "uid": "memory-steward-postgres"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "postgres",
+                    "uid": "memory-steward-postgres"
+                  },
+                  "editorMode": "code",
+                  "format": "time_series",
+                  "rawQuery": true,
+                  "rawSql": "SELECT date_trunc('minute',t_begin) AS time,operation,count(*)::double precision/60.0 AS value FROM telemetry.request WHERE $__timeFilter(t_begin) AND operation IN ('context_retrieve','reference_search','reference_get') GROUP BY 1,2 ORDER BY 1",
+                  "legendFormat": "{{operation}}",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 304,
+              "type": "timeseries",
+              "title": "Candidates vs selected",
+              "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "postgres",
+                "uid": "memory-steward-postgres"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 8,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "postgres",
+                    "uid": "memory-steward-postgres"
+                  },
+                  "editorMode": "code",
+                  "format": "time_series",
+                  "rawQuery": true,
+                  "rawSql": "SELECT date_trunc('minute',r.t_begin) AS time,avg(x.dense_candidates) AS value FROM telemetry.retrieval x JOIN telemetry.request r USING(request_id) WHERE $__timeFilter(r.t_begin) GROUP BY 1 ORDER BY 1",
+                  "legendFormat": "candidates",
+                  "refId": "A"
+                },
+                {
+                  "datasource": {
+                    "type": "postgres",
+                    "uid": "memory-steward-postgres"
+                  },
+                  "editorMode": "code",
+                  "format": "time_series",
+                  "rawQuery": true,
+                  "rawSql": "SELECT date_trunc('minute',r.t_begin) AS time,avg(x.selected_topk) AS value FROM telemetry.retrieval x JOIN telemetry.request r USING(request_id) WHERE $__timeFilter(r.t_begin) GROUP BY 1 ORDER BY 1",
+                  "legendFormat": "selected",
+                  "refId": "B"
+                }
+              ]
+            },
+            {
+              "id": 305,
+              "type": "table",
+              "title": "Recent retrieval operations",
+              "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 12,
+                "h": 10
+              },
+              "datasource": {
+                "type": "postgres",
+                "uid": "memory-steward-postgres"
+              },
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {}
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "postgres",
+                    "uid": "memory-steward-postgres"
+                  },
+                  "editorMode": "code",
+                  "format": "table",
+                  "rawQuery": true,
+                  "rawSql": "SELECT request_id,t_begin,project_id,operation,http_status,error_kind FROM telemetry.request WHERE $__timeFilter(t_begin) AND operation IN ('context_retrieve','reference_search','reference_get') ORDER BY t_begin DESC LIMIT 100",
+                  "refId": "A"
+                }
+              ]
+            },
+            {
+              "id": 306,
+              "type": "logs",
+              "title": "Memory Steward logs · MCP query events included",
+              "gridPos": {
+                "x": 12,
+                "y": 16,
+                "w": 12,
+                "h": 10
+              },
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "victorialogs"
+              },
+              "targets": [
+                {
+                  "editorMode": "code",
+                  "expr": "project:=\"memory-steward\"",
+                  "refId": "A"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 40,
+      "tags": [
+        "llm-runtime",
+        "memory-steward",
+        "mcp",
+        "overview"
+      ],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "timezone": "browser",
+      "title": "AI Runtime \u00b7 Executive Overview",
+      "uid": "ai-runtime-overview",
+      "version": 1
+    }

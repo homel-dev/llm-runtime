@@ -1,5 +1,6 @@
 # LLM Runtime
 
+[![CI](https://github.com/homel-dev/llm-runtime/actions/workflows/main.yml/badge.svg)](https://github.com/homel-dev/llm-runtime/actions/workflows/main.yml)
 [![Gateway image](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml/badge.svg?branch=main)](https://github.com/homel-dev/llm-runtime/actions/workflows/gateway-image.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/homel-dev/llm-runtime?branch=main)](https://github.com/homel-dev/llm-runtime/commits/main)
