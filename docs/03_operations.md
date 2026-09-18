@@ -91,6 +91,46 @@ task gateway:deploy
 task gateway:status
 ```
 
+### Parallel OmniRoute gateway
+
+```bash
+task omniroute:deploy
+task omniroute:status
+task omniroute:endpoint:check
+```
+
+OmniRoute is exposed separately at
+`http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000`.
+Deploying it does not replace or mutate the existing `llm-openai-api-gateway`
+Service. The parallel consumer endpoint has `REQUIRE_API_KEY=false`, so RR
+switches only the base URL; management operations still use the OmniRoute
+operator token.
+
+Configure the non-interactive native providers and stable RR aliases:
+
+```bash
+task omniroute:configure-runtime
+```
+
+This creates or reconciles direct `glm`, `llama-cpp`, and `vllm` connections.
+`glm` uses the existing `rr-zai-coding` API-key Secret and talks directly to
+Z.AI Coding Plan. The local connections talk directly to `llm-small:8000` and
+`llm-large:8000`. The legacy gateway is not an OmniRoute upstream.
+
+Codex and Antigravity must use independent native OAuth sessions so the legacy
+gateway remains a real rollback path. In particular, do not copy the legacy
+Codex `auth.json` into OmniRoute: Codex refresh-token rotation can invalidate a
+shared token family. Run `task omniroute:ui`, add the `codex` and `agy` providers
+through OmniRoute authentication, then validate:
+
+```bash
+task omniroute:auth:status
+task omniroute:check
+```
+
+`omniroute:check` requires both native OAuth connections and verifies that the
+parallel `/v1/models` surface advertises all seven RR model IDs.
+
 ### MCP gateway
 
 ```bash
@@ -321,24 +361,44 @@ optionally invokes retrieval operations.
 
 ## 7. Observability and OCO
 
-Deploy Prometheus and DCGM exporter:
+Deploy Prometheus, Alloy, Blackbox Exporter, and DCGM exporter:
 
 ```bash
 task observability:deploy
 ```
 
-The task reapplies the Prometheus ConfigMap and restarts Prometheus so changed
-scrape configuration is loaded.
+The task reapplies telemetry configuration and restarts Prometheus, Alloy, and
+Blackbox Exporter so changed scrape, OTLP, and spanmetrics configuration is
+loaded. Alloy writes OmniRoute span-derived RED metrics through Prometheus's
+remote-write receiver so they are queryable through the existing
+`llm-runtime-prometheus` datasource.
 
 Inspect targets and health:
 
 ```bash
 task observability:targets
-task observability:vllm-targets
-task observability:vllm-up
-task observability:gateway-target
-task observability:gateway-up
+task observability:targets JOB=vllm
+task observability:up JOB=vllm
+task observability:targets JOB=gateway
+task observability:up JOB=gateway
+task observability:targets JOB=omniroute
+task observability:up JOB=omniroute
 ```
+
+For the complete OmniRoute telemetry path and dashboard contract:
+
+```bash
+task omniroute:observability:deploy
+task omniroute:observability:check
+```
+
+The availability signal is an HTTP blackbox probe of the parallel `/healthz`
+endpoint. Routing requests emit native OmniRoute OTLP traces. Alloy forwards
+those traces to OCO/Tempo and derives Prometheus RED metrics named under the
+`omniroute_` prefix. OmniRoute Pod logs are collected by the existing Alloy
+Kubernetes log pipeline. The deep management endpoint `/api/monitoring/health`
+is checked only on demand with `task omniroute:deep-health`; it is not scraped
+periodically.
 
 Publish OCO/Grafana datasource and dashboards:
 
@@ -347,10 +407,12 @@ task oco-consumer:deploy
 task oco-consumer:status
 ```
 
-Published dashboards include `LLM Runtime` and `LLM Runtime Gateway`
-(`uid=llm-runtime-gateway`). Gateway panels expose health, request rate, p95
-latency, errors and timeouts, last-success age, policy rejects, and process
-memory.
+Published dashboards include `LLM Runtime`, `LLM Runtime Gateway`
+(`uid=llm-runtime-gateway`), `LLM Runtime · OmniRoute`
+(`uid=llm-runtime-omniroute`), and `LLM Runtime · MCP Gateway`. The OmniRoute
+dashboard combines blackbox availability, span-derived request/error/latency
+metrics, provider/model and fallback dimensions, VictoriaLogs Pod logs, and
+Tempo routing traces.
 
 Expose Prometheus to the host or LAN when required:
 

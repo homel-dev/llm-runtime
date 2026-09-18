@@ -18,6 +18,15 @@ spec:
               app.kubernetes.io/name: rr-pi-agent
       ports:
         - { protocol: TCP, port: 20128 }
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: blackbox-exporter
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: runtime-operator-check
+      ports:
+        - { protocol: TCP, port: 20128 }
   egress:
     - to:
         - namespaceSelector:
@@ -41,6 +50,12 @@ spec:
               app.kubernetes.io/name: alloy
       ports:
         - { protocol: TCP, port: 4318 }
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: inference
+      ports:
+        - { protocol: TCP, port: 8000 }
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -70,3 +85,22 @@ spec:
               app.kubernetes.io/name: omniroute
       ports:
         - { protocol: TCP, port: 6379 }
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-omniroute-to-inference
+  namespace: llm-runtime
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: inference
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: omniroute
+      ports:
+        - { protocol: TCP, port: 8000 }

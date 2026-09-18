@@ -86,8 +86,10 @@ workflows, policies, persistence, or authority.
 
 ### Observable infrastructure
 
-Local inference and gateway behavior are exported to Prometheus. OCO/Grafana
-consumes runtime-owned datasource and dashboard contracts.
+Local inference and gateway behavior are exported to Prometheus. OmniRoute
+routing events are exported as OTLP traces through Alloy and converted to
+span-derived RED metrics, while its parallel Service is independently blackbox
+probed. OCO/Grafana consumes runtime-owned datasource and dashboard contracts.
 
 ### Explicit lifecycle boundaries
 
@@ -111,9 +113,11 @@ flowchart LR
 
     subgraph LRUNTIME[llm-runtime]
         G[LLM Gateway]
+        O[OmniRoute<br/>parallel endpoint]
         S[llm-small]
         L[llm-large]
         M[MCP Gateway]
+        A[Alloy / Prometheus]
     end
 
     P1[ChatGPT / Codex]
@@ -121,10 +125,12 @@ flowchart LR
     MS[Memory Steward<br/>namespace ms]
 
     C -->|Model API| G
+    C -.->|Optional test base URL| O
     G --> S
     G --> L
     G --> P1
     G --> P2
+    O --> A
 
     C -->|MCP| M
     M --> MS
@@ -177,11 +183,21 @@ identity must validate the advertised model contract.
 
 ## 5. Runtime Gateways
 
-The consumer-facing LLM endpoint is:
+The existing consumer-facing LLM endpoint is:
 
 ```text
 http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 ```
+
+OmniRoute is exposed independently for controlled consumer testing at:
+
+```text
+http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000
+```
+
+The Services are parallel; deploying OmniRoute does not change the existing
+gateway Service selector or endpoint. The consumer data plane does not require a
+client API key, allowing RR to test it by changing only the configured base URL.
 
 Current configured model aliases are:
 
@@ -330,12 +346,18 @@ vllm-small
 vllm-medium
 vllm-large
 llm-gateway
+omniroute-blackbox
 dcgm-exporter
 ```
 
 The gateway exports request volume, backend/model/status dimensions, latency,
 in-flight requests, transport errors and timeouts, policy rejects, traffic
-bytes, last success/error state, uptime, and process RSS on TCP/9091.
+bytes, last success/error state, uptime, and process RSS on TCP/9091. OmniRoute
+exports routing metadata as OTLP traces to Alloy. Alloy derives `omniroute_*`
+RED metrics with provider/model/outcome/status/fallback dimensions and forwards
+the original traces to OCO/Tempo. The OmniRoute Service itself is monitored by
+`omniroute-blackbox` against `/healthz`, and Pod logs flow through the existing
+Alloy log pipeline.
 
 Desired State is expressed by manifests and runtime configuration. Observed
 State is produced by Kubernetes status, health checks, and telemetry. A mismatch

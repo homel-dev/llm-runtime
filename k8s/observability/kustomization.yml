@@ -12,6 +12,10 @@ resources:
 
   - alloy/alloy.yml
 
+  - blackbox/configmap.yml
+  - blackbox/deployment.yml
+  - blackbox/service.yml
+
   - exporters/dcgm/daemonset.yml
   - exporters/dcgm/service.yml
 

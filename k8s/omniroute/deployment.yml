@@ -43,7 +43,8 @@ spec:
             - { name: DATA_DIR, value: /app/data }
             - { name: BASE_URL, value: "http://127.0.0.1:20128" }
             - { name: NEXT_PUBLIC_BASE_URL, value: "http://localhost:20128" }
-            - { name: REQUIRE_API_KEY, value: "true" }
+            - { name: REQUIRE_API_KEY, value: "false" }
+            - { name: OMNIROUTE_ALLOW_LOCAL_PROVIDER_URLS, value: "true" }
             - { name: AUTH_COOKIE_SECURE, value: "false" }
             - { name: APP_LOG_TO_FILE, value: "true" }
             - { name: REDIS_URL, value: "redis://omniroute-redis:6379" }

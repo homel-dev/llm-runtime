@@ -134,6 +134,12 @@ data:
       }
     }
 
+    prometheus.remote_write "local" {
+      endpoint {
+        url = "http://prometheus.llm-runtime.svc.cluster.local:9090/api/v1/write"
+      }
+    }
+
     prometheus.scrape "alloy_self" {
       targets = [
         {
@@ -245,8 +251,75 @@ data:
       output {
         metrics = [otelcol.processor.transform.identity.input]
         logs    = [otelcol.processor.transform.identity.input]
-        traces  = [otelcol.processor.transform.identity.input]
+        traces  = [
+          otelcol.processor.transform.identity.input,
+          otelcol.processor.filter.omniroute_spanmetrics.input,
+        ]
       }
+    }
+
+    otelcol.processor.filter "omniroute_spanmetrics" {
+      error_mode = "ignore"
+
+      trace_conditions {
+        context = "resource"
+        conditions = [
+          `attributes["service.name"] != "llm-runtime-omniroute"`,
+        ]
+      }
+
+      output {
+        traces = [otelcol.connector.spanmetrics.omniroute.input]
+      }
+    }
+
+    otelcol.connector.spanmetrics "omniroute" {
+      namespace                     = "omniroute"
+      aggregation_temporality       = "CUMULATIVE"
+      aggregation_cardinality_limit = 5000
+      metrics_flush_interval         = "10s"
+      metrics_expiration             = "15m"
+      series_expiration              = "15m"
+      include_collector_instance_id  = true
+      resource_metrics_key_attributes = ["service.name", "telemetry.sdk.name"]
+
+      dimension {
+        name = "gen_ai.provider.name"
+      }
+
+      dimension {
+        name = "gen_ai.request.model"
+      }
+
+      dimension {
+        name = "omniroute.routing.outcome"
+      }
+
+      dimension {
+        name = "omniroute.routing.status"
+      }
+
+      dimension {
+        name = "omniroute.routing.fallback_used"
+      }
+
+      histogram {
+        unit = "s"
+        explicit {
+          buckets = ["50ms", "100ms", "250ms", "500ms", "1s", "2s", "5s", "10s", "30s", "60s", "120s"]
+        }
+      }
+
+      output {
+        metrics = [otelcol.exporter.prometheus.omniroute.input]
+      }
+    }
+
+    otelcol.exporter.prometheus "omniroute" {
+      forward_to = [
+        prometheus.remote_write.local.receiver,
+        prometheus.remote_write.oco.receiver,
+      ]
     }
 
     otelcol.processor.transform "identity" {

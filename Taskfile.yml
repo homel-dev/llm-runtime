@@ -240,13 +240,13 @@ tasks:
     desc: Delete OmniRoute workloads while preserving its PVC and Secrets
     cmds:
       - kubectl -n llm-runtime delete deployment omniroute omniroute-redis --ignore-not-found=true
-      - kubectl -n llm-runtime delete service omniroute omniroute-redis --ignore-not-found=true
-      - kubectl -n llm-runtime delete networkpolicy omniroute omniroute-redis --ignore-not-found=true
+      - kubectl -n llm-runtime delete service omniroute llm-openai-api-gateway-omniroute omniroute-redis --ignore-not-found=true
+      - kubectl -n llm-runtime delete networkpolicy omniroute omniroute-redis allow-omniroute-to-inference --ignore-not-found=true
 
   omniroute:status:
-    desc: Show OmniRoute deployment, Service, PVC, Redis, and bootstrap/operator Secrets
+    desc: Show OmniRoute deployment, Services, PVC, Redis, and bootstrap/operator Secrets
     cmds:
-      - kubectl -n llm-runtime get deployment/omniroute deployment/omniroute-redis service/omniroute service/omniroute-redis pvc/omniroute-data secret/omniroute-runtime
+      - kubectl -n llm-runtime get deployment/omniroute deployment/omniroute-redis service/omniroute service/llm-openai-api-gateway-omniroute service/omniroute-redis pvc/omniroute-data secret/omniroute-runtime
       - kubectl -n llm-runtime get secret/omniroute-operator-token --ignore-not-found=true
 
   omniroute:logs:
@@ -270,6 +270,11 @@ tasks:
       - ./scripts/omniroute-request.sh GET /healthz --no-auth
       - ./scripts/omniroute-request.sh GET /livez --no-auth
 
+  omniroute:endpoint:check:
+    desc: Check the parallel OpenAI-compatible OmniRoute Service endpoint from an in-cluster operator-check Pod
+    cmds:
+      - ./scripts/kcurl.sh llm-runtime http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000/healthz
+
   omniroute:operator-token:
     desc: Mint an OmniRoute admin CLI token from the bootstrap password and store it in a Kubernetes Secret
     cmds:
@@ -283,7 +288,43 @@ tasks:
   omniroute:providers:test:
     desc: Test all active OmniRoute provider connections
     cmds:
-      - ./scripts/omniroute-request.sh POST /api/providers/test-batch '{}'
+      - |
+        result="$(./scripts/omniroute-request.sh POST /api/providers/test-batch '{"mode":"all"}')"
+        printf '%s\n' "$result" | jq -e '.summary.total > 0 and .summary.failed == 0 and .summary.passed == .summary.total'
+
+  omniroute:configure-runtime:
+    desc: Configure native GLM and local providers plus stable RR model aliases
+    cmds:
+      - ./scripts/omniroute-configure-runtime.sh
+
+  omniroute:auth:status:
+    desc: Show native OmniRoute Codex and Antigravity OAuth connection state
+    cmds:
+      - >-
+        ./scripts/omniroute-request.sh GET /api/providers
+        | jq '{codex: [.connections[] | select(.provider == "codex") | {id,name,isActive,testStatus}], agy: [.connections[] | select(.provider == "agy") | {id,name,isActive,testStatus}]}'
+
+  omniroute:auth:check:
+    desc: Require independent active Codex and Antigravity OAuth connections in OmniRoute
+    cmds:
+      - >-
+        ./scripts/omniroute-request.sh GET /api/providers
+        | jq -e '([.connections[] | select(.provider == "codex" and .isActive == true)] | length) > 0 and ([.connections[] | select(.provider == "agy" and .isActive == true)] | length) > 0'
+
+  omniroute:runtime:check:
+    desc: Verify the parallel endpoint advertises every RR runtime model alias
+    cmds:
+      - |
+        set -eu
+        models="$(./scripts/kcurl.sh llm-runtime http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000/v1/models)"
+        for model in llm-small llm-large gpt-5.6-sol gemini-subscription-pro gemini-subscription-auto glm-5.3 glm-5.3-flash
+        do
+          printf '%s\n' "$models" | jq -e --arg model "$model" '.data | any(.id == $model)' >/dev/null || {
+            echo "OmniRoute model missing: $model" >&2
+            exit 1
+          }
+        done
+        echo "OK: OmniRoute advertises all RR runtime model aliases"
 
   omniroute:combos:
     desc: List OmniRoute routing combos
@@ -301,39 +342,65 @@ tasks:
       - ./scripts/omniroute-request.sh PUT /api/db-backups '{}'
 
   omniroute:check:
-    desc: Run OmniRoute health, provider, and combo checks
+    desc: Run OmniRoute health, native-auth, provider, model-catalog, and combo checks
     cmds:
       - task: omniroute:health
+      - task: omniroute:auth:check
       - task: omniroute:providers:test
+      - task: omniroute:runtime:check
       - task: omniroute:combos
 
+  omniroute:observability:deploy:
+    desc: Deploy OmniRoute metrics/log/trace plumbing and the OCO dashboard
+    cmds:
+      - task: observability:deploy
+      - task: oco-consumer:deploy
+      - task: omniroute:observability:check
+
+  omniroute:observability:check:
+    desc: Validate OmniRoute blackbox telemetry and show span-derived RED metrics when traffic exists
+    cmds:
+      - >-
+        ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/query
+        --get --data-urlencode 'query=max(probe_success{job="omniroute-blackbox"})'
+        | jq -e '.data.result | length == 1 and .data.result[0].value[1] == "1"'
+      - >-
+        ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/query
+        --get --data-urlencode 'query=sum(rate(omniroute_calls_total[5m]))'
+        | jq '.data.result'
+      - kubectl -n llm-runtime get configmap/llm-runtime-omniroute-dashboard
+
   observability:deploy:
-    desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"
+    desc: "Deploy runtime telemetry resources: Prometheus, Alloy, blackbox exporter, and DCGM exporter"
     cmds:
       - kubectl apply -k k8s/observability
-      - kubectl -n llm-runtime rollout restart deployment/prometheus
+      - kubectl -n llm-runtime rollout restart daemonset/alloy deployment/prometheus deployment/blackbox-exporter
+      - kubectl -n llm-runtime rollout status daemonset/alloy --timeout=120s
       - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=120s
+      - kubectl -n llm-runtime rollout status deployment/blackbox-exporter --timeout=120s
 
   observability:delete:
-    desc: "Delete runtime metrics resources: Prometheus and DCGM exporter"
+    desc: "Delete runtime telemetry resources: Prometheus, Alloy, blackbox exporter, and DCGM exporter"
     cmds:
       - kubectl delete -k k8s/observability
 
   observability:status:
-    desc: Show Prometheus and DCGM exporter status
+    desc: Show Prometheus, Alloy, blackbox exporter, and DCGM exporter status
     cmds:
-      - kubectl -n llm-runtime get deployment/prometheus daemonset/dcgm-exporter service/prometheus service/dcgm-exporter configmap/prometheus-config
+      - kubectl -n llm-runtime get deployment/prometheus deployment/blackbox-exporter daemonset/alloy daemonset/dcgm-exporter service/prometheus service/alloy service/blackbox-exporter service/dcgm-exporter configmap/prometheus-config
 
   observability:logs:
-    desc: Follow observability logs (COMPONENT=prometheus|dcgm)
+    desc: Follow observability logs (COMPONENT=prometheus|alloy|blackbox|dcgm)
     requires:
       vars:
         - name: COMPONENT
-          enum: [prometheus, dcgm]
+          enum: [prometheus, alloy, blackbox, dcgm]
     cmds:
       - |
         case "{{.COMPONENT}}" in
           prometheus) kubectl -n llm-runtime logs deploy/prometheus -f ;;
+          alloy)      kubectl -n llm-runtime logs ds/alloy -f ;;
+          blackbox)   kubectl -n llm-runtime logs deploy/blackbox-exporter -f ;;
           dcgm)       kubectl -n llm-runtime logs ds/dcgm-exporter -f ;;
         esac
 
@@ -350,17 +417,131 @@ tasks:
   oco-consumer:status:
     desc: Show llm-runtime OCO consumer ConfigMaps and RBAC
     cmds:
-      - kubectl -n llm-runtime get configmap llm-runtime-dashboard llm-runtime-gateway-dashboard llm-runtime-datasource
+      - kubectl -n llm-runtime get configmap -l grafana_datasource=1 -o wide
+      - kubectl -n llm-runtime get configmap -l grafana_dashboard=1 -o wide
       - kubectl -n llm-runtime get role,rolebinding observability-console-reader
 
+  oco-consumer:reload:
+    desc: Reload OCO Grafana provisioning after llm-runtime consumer changes
+    cmds:
+      - |
+        kubectl exec -n observability-console deployment/grafana -c grafana -- sh -ec '
+          curl -fsS -X POST \
+            --user "$GF_SECURITY_ADMIN_USER:$GF_SECURITY_ADMIN_PASSWORD" \
+            http://127.0.0.1:3000/api/admin/provisioning/datasources/reload
+          printf "\n"
+          curl -fsS -X POST \
+            --user "$GF_SECURITY_ADMIN_USER:$GF_SECURITY_ADMIN_PASSWORD" \
+            http://127.0.0.1:3000/api/admin/provisioning/dashboards/reload
+          printf "\n"
+        '
+      - task: oco-consumer:check
+
+  oco-consumer:check:
+    desc: Verify OCO sidecar, RBAC, provisioning, curated dashboards, and shared llm-runtime metrics
+    cmds:
+      - |
+        set -eu
+
+        kubectl rollout status deployment/grafana -n observability-console --timeout=60s
+
+        for verb in get list watch; do
+          allowed="$(kubectl auth can-i "$verb" configmaps \
+            -n llm-runtime \
+            --as=system:serviceaccount:observability-console:observability-console)"
+          if [ "$allowed" != "yes" ]; then
+            echo "OCO RBAC check failed: $verb configmaps in llm-runtime -> $allowed" >&2
+            exit 1
+          fi
+        done
+
+        for sidecar in sidecar-datasources sidecar-dashboards; do
+          namespaces="$(kubectl get deployment grafana -n observability-console -o json \
+            | jq -r --arg sidecar "$sidecar" '.spec.template.spec.containers[] | select(.name == $sidecar) | .env[] | select(.name == "NAMESPACE") | .value')"
+          case ",$namespaces," in
+            *,llm-runtime,*) ;;
+            *)
+              echo "OCO $sidecar does not watch llm-runtime: $namespaces" >&2
+              exit 1
+              ;;
+          esac
+        done
+
+        kubectl get configmap -n llm-runtime -l grafana_datasource=1 -o name | grep -qx 'configmap/llm-runtime-datasource'
+        for cm in \
+          ai-runtime-pulse-dashboard \
+          ai-runtime-inference-dashboard \
+          ai-runtime-agents-memory-dashboard \
+          llm-runtime-omniroute-dashboard
+        do
+          kubectl get configmap "$cm" -n llm-runtime >/dev/null
+        done
+
+        for file in \
+          ai-runtime-pulse.json \
+          ai-runtime-inference.json \
+          ai-runtime-agents-memory.json \
+          llm-runtime-omniroute.json
+        do
+          found=0
+          for _ in $(seq 1 15); do
+            if kubectl exec -n observability-console deployment/grafana -c grafana -- \
+              test -f "/var/lib/grafana/dashboards/$file"; then
+              found=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "OCO dashboard sidecar did not materialize $file" >&2
+            exit 1
+          fi
+        done
+
+        kubectl exec -n observability-console deployment/grafana -c grafana -- sh -ec '
+          curl -fsS \
+            --user "$GF_SECURITY_ADMIN_USER:$GF_SECURITY_ADMIN_PASSWORD" \
+            http://127.0.0.1:3000/api/datasources/uid/victoriametrics >/dev/null
+        '
+
+        for uid in ai-runtime-pulse ai-runtime-inference ai-runtime-agents-memory llm-runtime-omniroute; do
+          found=0
+          for _ in $(seq 1 15); do
+            if kubectl exec -n observability-console deployment/grafana -c grafana -- sh -ec \
+              "curl -fsS --user \"\$GF_SECURITY_ADMIN_USER:\$GF_SECURITY_ADMIN_PASSWORD\" http://127.0.0.1:3000/api/dashboards/uid/$uid >/dev/null"; then
+              found=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$found" -ne 1 ]; then
+            echo "Grafana did not provision dashboard uid=$uid" >&2
+            exit 1
+          fi
+        done
+
+        vm_payload="$(kubectl exec -n observability-console deployment/grafana -c grafana -- sh -ec '
+          curl -fsSG \
+            http://victoriametrics.observability-backend.svc.cluster.local:8428/api/v1/query \
+            --data-urlencode "query=up{project=\"llm-runtime\"}"
+        ')"
+        printf '%s\n' "$vm_payload" | jq -e '
+          .status == "success" and (.data.result | length) > 0
+        ' >/dev/null || {
+          echo "shared VictoriaMetrics has no up{project=\"llm-runtime\"} series" >&2
+          exit 1
+        }
+
+        echo "OK: llm-runtime OCO consumer is provisioned and shared metrics are present"
+
   observability:targets:
-    desc: Show Prometheus scrape targets (JOB=all|vllm|gateway, default all)
+    desc: Show Prometheus scrape targets (JOB=all|vllm|gateway|omniroute, default all)
     vars:
       JOB: '{{.JOB | default "all"}}'
     requires:
       vars:
         - name: JOB
-          enum: [all, vllm, gateway]
+          enum: [all, vllm, gateway, omniroute]
     cmds:
       - |
         case "{{.JOB}}" in
@@ -375,22 +556,27 @@ tasks:
             ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets \
               | jq '.data.activeTargets[] | select(.labels.job == "llm-gateway") | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
             ;;
+          omniroute)
+            ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/targets \
+              | jq '.data.activeTargets[] | select(.labels.job == "omniroute-blackbox") | {job:.labels.job, health:.health, scrapeUrl:.scrapeUrl, lastError:.lastError}'
+            ;;
         esac
 
   observability:up:
-    desc: Query Prometheus up metrics (JOB=all|vllm|gateway, default all)
+    desc: Query Prometheus availability (JOB=all|vllm|gateway|omniroute, default all)
     vars:
       JOB: '{{.JOB | default "all"}}'
     requires:
       vars:
         - name: JOB
-          enum: [all, vllm, gateway]
+          enum: [all, vllm, gateway, omniroute]
     cmds:
       - |
         case "{{.JOB}}" in
           all)     query='up' ;;
           vllm)    query='up{job=~"vllm-.*"}' ;;
           gateway) query='up{job="llm-gateway"}' ;;
+          omniroute) query='probe_success{job="omniroute-blackbox"}' ;;
         esac
         ./scripts/kcurl.sh llm-runtime http://prometheus:9090/api/v1/query \
           --get \

@@ -9,6 +9,7 @@
 - [Status and Authority](#status-and-authority)
 - [Ownership](#ownership)
 - [Backends](#backends)
+- [Parallel OmniRoute Providers](#parallel-omniroute-providers)
 - [Codex Subscription Transport](#codex-subscription-transport)
 - [Gemini Subscription Transport](#gemini-subscription-transport)
 - [Z.AI Coding Plan Transport](#zai-coding-plan-transport)
@@ -64,6 +65,19 @@ Stable endpoint:
 http://llm-openai-api-gateway.llm-runtime.svc.cluster.local:8000
 ```
 
+OmniRoute is exposed in parallel through a separate OpenAI-compatible Service:
+
+```text
+http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000
+```
+
+The two Services are independent. Deploying or testing OmniRoute does not change
+the selector, port, or behavior of `llm-openai-api-gateway`. The parallel consumer
+endpoint does not require a client API key, so RR can switch only its configured
+base URL to OmniRoute for testing and switch back to the existing gateway endpoint.
+OmniRoute management APIs remain protected by the existing bootstrap/operator
+authentication path.
+
 [Back to top](#llm-gateway)
 
 ---
@@ -86,6 +100,36 @@ The medium tier is not a current gateway backend.
 
 The gateway rewrites local consumer aliases to the served upstream model names.
 Unknown model IDs fail rather than being forwarded to an arbitrary destination.
+
+[Back to top](#llm-gateway)
+
+---
+
+## Parallel OmniRoute Providers
+
+The parallel OmniRoute endpoint owns its provider connections directly. It does
+not route through `llm-openai-api-gateway`. The stable RR model surface maps to
+native OmniRoute targets as follows:
+
+| RR model ID | OmniRoute target | Authentication |
+| --- | --- | --- |
+| `llm-small` | `llama-cpp/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M` | none |
+| `llm-large` | `vllm/Qwen2.5-72B-Instruct-AWQ` | none |
+| `gpt-5.6-sol` | `codex/gpt-5.6-sol` | independent OmniRoute Codex OAuth |
+| `gemini-subscription-pro` | `agy/gemini-pro-agent` | independent OmniRoute Antigravity CLI OAuth |
+| `gemini-subscription-auto` | `agy/gemini-3.7-flash-medium` | independent OmniRoute Antigravity CLI OAuth |
+| `glm-5.3` | `glm/glm-5.3` | `rr-zai-coding` API key |
+| `glm-5.3-flash` | `glm/glm-5.3-flash` | `rr-zai-coding` API key |
+
+`glm` is the OmniRoute Coding Plan provider. `zai` is a different Z.AI provider
+whose default transport is the Anthropic-compatible API; it is not used for the
+existing Coding Plan contract.
+
+`task omniroute:configure-runtime` reconciles the GLM and local connections and
+sets the seven aliases. Codex and Antigravity authentication is intentionally
+not copied from the legacy gateway. Both endpoints must keep independent OAuth
+refresh state so switching RR back to the legacy endpoint remains a valid
+rollback operation.
 
 [Back to top](#llm-gateway)
 
@@ -340,18 +384,44 @@ The OCO consumer contract publishes `LLM Runtime Gateway`
 errors and timeouts, last-success age, traffic, policy rejections, and process
 memory.
 
+The parallel OmniRoute endpoint has its own telemetry path and dashboard.
+OmniRoute exports routing events as OTLP/HTTP traces to the runtime Alloy
+collector with `service.name=llm-runtime-omniroute`. Alloy forwards the original
+traces to OCO/Tempo and derives bounded RED metrics from only those OmniRoute
+spans with `otelcol.connector.spanmetrics`. Generated metrics are written to the
+local Prometheus remote-write receiver and to the OCO metrics backend. They
+include request count and duration, with provider, model, routing outcome, HTTP
+status, and fallback dimensions. OmniRoute Pod stdout/stderr continues through
+the runtime Alloy log pipeline.
+
+OmniRoute does not currently expose a native Prometheus `/metrics` endpoint for
+these routing events. Availability of the parallel Service is therefore measured
+independently by Prometheus Blackbox Exporter against `/healthz` using job
+`omniroute-blackbox`. The heavier `/api/monitoring/health` endpoint is reserved
+for explicit operator checks (`task omniroute:deep-health`) and is not used as a
+10-second scrape target.
+
+The OCO consumer contract additionally publishes `LLM Runtime · OmniRoute`
+(`uid=llm-runtime-omniroute`) with endpoint availability, request and failure
+rates, fallback rate, p50/p95/p99 request latency, provider/model traffic, routed
+HTTP status, Pod logs, and Tempo routing traces.
+
 Reconcile monitoring with:
 
 ```bash
 task gateway:observability:deploy
+task omniroute:observability:deploy
 ```
 
 Validate the metrics path with:
 
 ```bash
 task gateway:metrics
-task observability:gateway-target
-task observability:gateway-up
+task observability:targets JOB=gateway
+task observability:up JOB=gateway
+task observability:targets JOB=omniroute
+task observability:up JOB=omniroute
+task omniroute:observability:check
 ```
 
 Telemetry is passive. During an idle period, expired credentials can remain
