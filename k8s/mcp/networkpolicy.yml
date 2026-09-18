@@ -39,6 +39,12 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: llm-runtime
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
       ports:
         - protocol: TCP
           port: 19001
@@ -79,7 +85,7 @@ spec:
               kubernetes.io/metadata.name: llm-runtime
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: otel-collector
+              app.kubernetes.io/name: alloy
       ports:
         - protocol: TCP
           port: 4317

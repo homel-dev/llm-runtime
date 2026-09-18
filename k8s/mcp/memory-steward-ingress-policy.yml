@@ -24,6 +24,9 @@ spec:
         - podSelector:
             matchLabels:
               app: memory-router
+        - podSelector:
+            matchLabels:
+              app: steward-tui
       ports:
         - protocol: TCP
           port: 8081

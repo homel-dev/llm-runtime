@@ -128,12 +128,13 @@ data:
             "h": 8
           },
           "datasource": {
-            "type": "loki",
-            "uid": "llm-runtime-loki"
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs"
           },
           "targets": [
             {
-              "expr": "{service_name=\"llm-runtime-mcp\"}",
+              "editorMode": "code",
+              "expr": "\"service.name\":=\"llm-runtime-mcp\"",
               "refId": "A"
             }
           ]
@@ -149,7 +150,7 @@ data:
           },
           "datasource": {
             "type": "tempo",
-            "uid": "llm-runtime-tempo"
+            "uid": "tempo"
           },
           "targets": [
             {

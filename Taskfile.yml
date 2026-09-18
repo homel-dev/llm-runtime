@@ -4,12 +4,17 @@ version: "3"
 vars:
   GATEWAY_IMAGE:
     sh: printf '%s' "${LLM_GATEWAY_IMAGE:-ghcr.io/homel-dev/llm-runtime-gateway:main}"
+  OMNIROUTE_IMAGE:
+    sh: printf '%s' "${OMNIROUTE_IMAGE:-docker.io/diegosouzapw/omniroute:next}"
   MINIKUBE_PROFILE:
     sh: printf '%s' "${MINIKUBE_PROFILE:-minikube}"
 
 includes:
   mcp:
     taskfile: ./taskfiles/mcp.yml
+    dir: .
+  obs:
+    taskfile: ./taskfiles/observability-shared.yml
     dir: .
 
 tasks:
@@ -60,6 +65,12 @@ tasks:
           enum: [small, large]
     cmds:
       - kubectl -n llm-runtime rollout restart deploy/llm-{{.TIER}}
+
+  llm:down:
+    desc: Down all
+    cmds:
+      - kubectl delete -n llm-runtime deployments.apps llm-large
+      - kubectl delete -n llm-runtime deployments.apps llm-small
 
   llm:list:
     desc: List a local runtime tier as advertised by the gateway (TIER=small|large)
@@ -197,6 +208,104 @@ tasks:
           enum: [all, openai, gemini, zai, local, api]
     cmds:
       - ./scripts/gateway-check-models.sh {{.PROVIDER}}
+
+  omniroute:secret:
+    desc: Create OmniRoute bootstrap Secret from OMNIROUTE_* environment variables (fails if it already exists)
+    cmds:
+      - |
+        : "${OMNIROUTE_INITIAL_PASSWORD:?OMNIROUTE_INITIAL_PASSWORD is required}"
+        : "${OMNIROUTE_JWT_SECRET:?OMNIROUTE_JWT_SECRET is required}"
+        : "${OMNIROUTE_API_KEY_SECRET:?OMNIROUTE_API_KEY_SECRET is required}"
+        : "${OMNIROUTE_STORAGE_ENCRYPTION_KEY:?OMNIROUTE_STORAGE_ENCRYPTION_KEY is required}"
+        : "${OMNIROUTE_MACHINE_ID_SALT:?OMNIROUTE_MACHINE_ID_SALT is required}"
+        : "${OMNIROUTE_WS_BRIDGE_SECRET:?OMNIROUTE_WS_BRIDGE_SECRET is required}"
+        kubectl -n llm-runtime create secret generic omniroute-runtime \
+          --from-literal=initial-password="$OMNIROUTE_INITIAL_PASSWORD" \
+          --from-literal=jwt-secret="$OMNIROUTE_JWT_SECRET" \
+          --from-literal=api-key-secret="$OMNIROUTE_API_KEY_SECRET" \
+          --from-literal=storage-encryption-key="$OMNIROUTE_STORAGE_ENCRYPTION_KEY" \
+          --from-literal=machine-id-salt="$OMNIROUTE_MACHINE_ID_SALT" \
+          --from-literal=ws-bridge-secret="$OMNIROUTE_WS_BRIDGE_SECRET"
+
+  omniroute:deploy:
+    desc: Deploy OmniRoute as a parallel experimental gateway
+    cmds:
+      - kubectl -n llm-runtime get secret/omniroute-runtime >/dev/null
+      - >-
+        kubectl kustomize k8s/omniroute | sed 's#image: omniroute:dev#image: {{.OMNIROUTE_IMAGE}}#g' | kubectl apply -f -
+      - kubectl -n llm-runtime rollout status deployment/omniroute-redis --timeout=120s
+      - kubectl -n llm-runtime rollout status deployment/omniroute --timeout=300s
+
+  omniroute:delete:
+    desc: Delete OmniRoute workloads while preserving its PVC and Secrets
+    cmds:
+      - kubectl -n llm-runtime delete deployment omniroute omniroute-redis --ignore-not-found=true
+      - kubectl -n llm-runtime delete service omniroute omniroute-redis --ignore-not-found=true
+      - kubectl -n llm-runtime delete networkpolicy omniroute omniroute-redis --ignore-not-found=true
+
+  omniroute:status:
+    desc: Show OmniRoute deployment, Service, PVC, Redis, and bootstrap/operator Secrets
+    cmds:
+      - kubectl -n llm-runtime get deployment/omniroute deployment/omniroute-redis service/omniroute service/omniroute-redis pvc/omniroute-data secret/omniroute-runtime
+      - kubectl -n llm-runtime get secret/omniroute-operator-token --ignore-not-found=true
+
+  omniroute:logs:
+    desc: Follow OmniRoute logs
+    cmds:
+      - kubectl -n llm-runtime logs deployment/omniroute -f
+
+  omniroute:redis:logs:
+    desc: Follow OmniRoute Redis logs
+    cmds:
+      - kubectl -n llm-runtime logs deployment/omniroute-redis -f
+
+  omniroute:ui:
+    desc: Port-forward OmniRoute UI/API to http://localhost:20128
+    cmds:
+      - kubectl -n llm-runtime port-forward deployment/omniroute 20128:20128 20132:20132 1455:1455
+
+  omniroute:health:
+    desc: Check OmniRoute lifecycle endpoints from inside the Pod
+    cmds:
+      - ./scripts/omniroute-request.sh GET /healthz --no-auth
+      - ./scripts/omniroute-request.sh GET /livez --no-auth
+
+  omniroute:operator-token:
+    desc: Mint an OmniRoute admin CLI token from the bootstrap password and store it in a Kubernetes Secret
+    cmds:
+      - ./scripts/omniroute-operator-token.sh
+
+  omniroute:providers:
+    desc: List configured OmniRoute provider connections
+    cmds:
+      - ./scripts/omniroute-request.sh GET /api/providers
+
+  omniroute:providers:test:
+    desc: Test all active OmniRoute provider connections
+    cmds:
+      - ./scripts/omniroute-request.sh POST /api/providers/test-batch '{}'
+
+  omniroute:combos:
+    desc: List OmniRoute routing combos
+    cmds:
+      - ./scripts/omniroute-request.sh GET /api/combos
+
+  omniroute:deep-health:
+    desc: Fetch OmniRoute deep monitoring health
+    cmds:
+      - ./scripts/omniroute-request.sh GET /api/monitoring/health
+
+  omniroute:backup:
+    desc: Create an OmniRoute database backup through the management API
+    cmds:
+      - ./scripts/omniroute-request.sh PUT /api/db-backups '{}'
+
+  omniroute:check:
+    desc: Run OmniRoute health, provider, and combo checks
+    cmds:
+      - task: omniroute:health
+      - task: omniroute:providers:test
+      - task: omniroute:combos
 
   observability:deploy:
     desc: "Deploy runtime metrics resources: Prometheus and DCGM exporter"

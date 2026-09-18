@@ -1,0 +1,449 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/component: telemetry
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alloy-pod-reader
+  namespace: llm-runtime
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alloy-pod-reader
+  namespace: llm-runtime
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: llm-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alloy-pod-reader
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/component: telemetry
+data:
+  config.alloy: |
+    logging {
+      level = "info"
+    }
+
+    discovery.kubernetes "pods" {
+      role = "pod"
+
+      namespaces {
+        own_namespace = true
+      }
+    }
+
+    discovery.relabel "pod_logs" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label  = "service"
+      }
+
+      rule {
+        source_labels = ["service", "__meta_kubernetes_pod_container_name"]
+        regex         = "^;(.*)$"
+        replacement   = "$1"
+        target_label  = "service"
+      }
+
+      rule {
+        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+        separator     = "/"
+        target_label  = "__path__"
+        replacement   = "/var/log/pods/*_$1/$2/*.log"
+      }
+    }
+
+    local.file_match "pod_logs" {
+      path_targets = discovery.relabel.pod_logs.output
+    }
+
+    loki.source.file "pod_logs" {
+      targets       = local.file_match.pod_logs.targets
+      tail_from_end = true
+      forward_to    = [loki.process.pod_logs.receiver]
+    }
+
+    loki.process "pod_logs" {
+      stage.cri {}
+
+      stage.labels {
+        values = {
+          namespace = "",
+          pod       = "",
+          container = "",
+          service   = "",
+        }
+      }
+
+      stage.static_labels {
+        values = {
+          project = "llm-runtime",
+        }
+      }
+
+      forward_to = [loki.write.oco.receiver]
+    }
+
+    loki.write "oco" {
+      endpoint {
+        url = "http://alloy.observability-backend.svc.cluster.local:12348/loki/api/v1/push"
+      }
+    }
+
+    prometheus.remote_write "oco" {
+      endpoint {
+        url = "http://alloy.observability-backend.svc.cluster.local:12347/api/v1/metrics/write"
+      }
+    }
+
+    prometheus.scrape "alloy_self" {
+      targets = [
+        {
+          "__address__" = "127.0.0.1:12345",
+          "job"         = "alloy",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "alloy",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "prometheus" {
+      targets = [
+        {
+          "__address__" = "prometheus.llm-runtime.svc.cluster.local:9090",
+          "job"         = "prometheus",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "prometheus",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "vllm_small" {
+      targets = [
+        {
+          "__address__" = "llm-small.llm-runtime.svc.cluster.local:8000",
+          "job"         = "vllm-small",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "llm-small",
+          "subsystem"   = "llm-runtime",
+          "tier"        = "small",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "vllm_large" {
+      targets = [
+        {
+          "__address__" = "llm-large.llm-runtime.svc.cluster.local:8000",
+          "job"         = "vllm-large",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "llm-large",
+          "subsystem"   = "llm-runtime",
+          "tier"        = "large",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "gateway" {
+      targets = [
+        {
+          "__address__" = "llm-openai-api-gateway.llm-runtime.svc.cluster.local:9091",
+          "job"         = "llm-gateway",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "llm-openai-api-gateway",
+          "subsystem"   = "llm-runtime",
+          "component"   = "gateway",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "mcp_envoy" {
+      targets = [
+        {
+          "__address__" = "llm-runtime-mcp-metrics.llm-runtime.svc.cluster.local:19001",
+          "job"         = "mcp-envoy",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "llm-runtime-mcp",
+          "subsystem"   = "llm-runtime",
+          "component"   = "mcp-gateway",
+        },
+      ]
+      metrics_path = "/stats/prometheus"
+      forward_to   = [prometheus.remote_write.oco.receiver]
+    }
+
+    prometheus.scrape "dcgm" {
+      targets = [
+        {
+          "__address__" = "dcgm-exporter.llm-runtime.svc.cluster.local:9400",
+          "job"         = "dcgm-exporter",
+          "project"     = "llm-runtime",
+          "namespace"   = "llm-runtime",
+          "service"     = "dcgm-exporter",
+          "subsystem"   = "gpu",
+        },
+      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
+    }
+
+    otelcol.receiver.otlp "local" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      output {
+        metrics = [otelcol.processor.transform.identity.input]
+        logs    = [otelcol.processor.transform.identity.input]
+        traces  = [otelcol.processor.transform.identity.input]
+      }
+    }
+
+    otelcol.processor.transform "identity" {
+      error_mode = "ignore"
+
+      trace_statements {
+        context = "resource"
+        statements = [
+          `set(attributes["project"], "llm-runtime") where attributes["project"] == nil`,
+          `set(attributes["k8s.namespace.name"], "llm-runtime") where attributes["k8s.namespace.name"] == nil`,
+          `set(attributes["deployment.environment.name"], "minikube") where attributes["deployment.environment.name"] == nil`,
+        ]
+      }
+
+      metric_statements {
+        context = "resource"
+        statements = [
+          `set(attributes["project"], "llm-runtime") where attributes["project"] == nil`,
+          `set(attributes["k8s.namespace.name"], "llm-runtime") where attributes["k8s.namespace.name"] == nil`,
+          `set(attributes["deployment.environment.name"], "minikube") where attributes["deployment.environment.name"] == nil`,
+        ]
+      }
+
+      log_statements {
+        context = "resource"
+        statements = [
+          `set(attributes["project"], "llm-runtime") where attributes["project"] == nil`,
+          `set(attributes["k8s.namespace.name"], "llm-runtime") where attributes["k8s.namespace.name"] == nil`,
+          `set(attributes["deployment.environment.name"], "minikube") where attributes["deployment.environment.name"] == nil`,
+        ]
+      }
+
+      output {
+        metrics = [otelcol.processor.batch.oco.input]
+        logs    = [otelcol.processor.batch.oco.input]
+        traces  = [otelcol.processor.batch.oco.input]
+      }
+    }
+
+    otelcol.processor.batch "oco" {
+      timeout = "5s"
+
+      output {
+        metrics = [otelcol.exporter.otlp.oco.input]
+        logs    = [otelcol.exporter.otlp.oco.input]
+        traces  = [otelcol.exporter.otlp.oco.input]
+      }
+    }
+
+    otelcol.exporter.otlp "oco" {
+      client {
+        endpoint = "alloy.observability-backend.svc.cluster.local:4317"
+        tls {
+          insecure = true
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/component: telemetry
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/component: telemetry
+        observability.homel.dev/project: llm-runtime
+    spec:
+      serviceAccountName: alloy
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.19.2
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy
+          ports:
+            - name: http
+              containerPort: 12345
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 75m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: storage
+              mountPath: /var/lib/alloy
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+        - name: storage
+          emptyDir: {}
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/component: telemetry
+spec:
+  selector:
+    app.kubernetes.io/name: alloy
+  ports:
+    - name: http
+      port: 12345
+      targetPort: http
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+---
+# Compatibility alias for existing OTLP producers and the phase-1 local
+# Prometheus config. The legacy otel-collector Deployment is removed, but its
+# Service name remains stable and now resolves to Alloy.
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/component: telemetry-compat
+spec:
+  selector:
+    app.kubernetes.io/name: alloy
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: metrics
+      port: 8888
+      targetPort: http
+    - name: runtime-metrics
+      port: 8889
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alloy-ingress
+  namespace: llm-runtime
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+        - protocol: TCP
+          port: 12345

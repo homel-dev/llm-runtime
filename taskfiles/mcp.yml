@@ -85,7 +85,7 @@ tasks:
     cmds:
       - kubectl -n llm-runtime get deploy,svc,pod -l gateway.envoyproxy.io/owning-gateway-name=llm-runtime-mcp
       - kubectl -n llm-runtime get gateway,mcproute,backend,envoyproxy,clienttrafficpolicy
-      - kubectl -n llm-runtime get deploy,svc,pvc tempo loki otel-collector 2>/dev/null || true
+      - kubectl -n llm-runtime get daemonset/alloy service/alloy deployment/prometheus service/prometheus 2>/dev/null || true
 
   logs:
     desc: Follow MCP Envoy proxy and ext-proc logs
@@ -110,37 +110,18 @@ tasks:
       - ./scripts/kcurl.sh llm-runtime http://llm-runtime-mcp-metrics.llm-runtime.svc.cluster.local:19001/stats/prometheus
 
   observability:deploy:
-    desc: Deploy Tempo, Loki, OTel Collector, Prometheus/OCO integration
+    desc: Deploy llm-runtime Alloy/Prometheus telemetry and OCO presentation resources
     cmds:
+      - kubectl apply -f k8s/namespace.yml
       - kubectl apply -k k8s/observability
-      - kubectl -n llm-runtime delete networkpolicy allow-observability-console-traces-logs allow-otel-ingress --ignore-not-found=true
-      - kubectl -n llm-runtime rollout status deployment/tempo --timeout=180s
-      - kubectl -n llm-runtime rollout status deployment/loki --timeout=180s
-      - kubectl -n llm-runtime rollout restart deployment/otel-collector
-      - kubectl -n llm-runtime rollout status deployment/otel-collector --timeout=180s
+      - kubectl -n llm-runtime rollout status daemonset/alloy --timeout=180s
       - kubectl -n llm-runtime rollout restart deployment/prometheus
       - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=180s
-      - |
-        set -euo pipefail
-        body=""
-        for attempt in $(seq 1 12); do
-          body="$(./scripts/kcurl.sh llm-runtime \
-            'http://prometheus.llm-runtime.svc.cluster.local:9090/api/v1/query?query=up%7Bjob%3D%22otel-runtime-metrics%22%7D' \
-            --connect-timeout 5 --max-time 10 2>/dev/null || true)"
-          if printf '%s\n' "${body}" | grep -Eq '"value":\[[^]]*,"1"\]'; then
-            exit 0
-          fi
-          sleep 5
-        done
-        echo "otel-runtime-metrics Prometheus target did not become healthy" >&2
-        printf '%s\n' "${body}" >&2
-        exit 1
+      - ./scripts/observability-shared-smoke.sh
       - kubectl apply -k k8s/oco-consumer
 
   observability:delete:
-    desc: Delete MCP observability workloads; PVCs remain unless explicitly removed
+    desc: Delete llm-runtime observability and OCO presentation resources; shared OCO backend is untouched
     cmds:
-      - kubectl -n llm-runtime delete deployment,service tempo loki otel-collector --ignore-not-found=true
-      - kubectl -n llm-runtime delete configmap llmrun-tempo-config tempo-config loki-config llmrun-otel-collector-config otel-collector-config --ignore-not-found=true
-      - kubectl -n llm-runtime delete networkpolicy llmrun-tempo-ingress llmrun-loki-ingress llmrun-otel-collector --ignore-not-found=true
-      - kubectl -n llm-runtime delete configmap llm-runtime-mcp-dashboard --ignore-not-found=true
+      - kubectl delete -k k8s/oco-consumer --ignore-not-found=true
+      - kubectl delete -k k8s/observability --ignore-not-found=true

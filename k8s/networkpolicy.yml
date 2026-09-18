@@ -4,7 +4,7 @@
 # into default-deny ingress, so OCO Grafana could not reach Prometheus and
 # Prometheus could not scrape DCGM. These three policies restore intent with
 # least privilege: consumers reach the runtime on 8000; OCO Grafana reaches
-# Prometheus on 9090; Prometheus scrapes DCGM (9400) and itself (9090).
+# Prometheus on 9090; Prometheus and Alloy scrape runtime metrics.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -29,9 +29,22 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
       ports:
         - protocol: TCP
           port: 8000
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kex
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kex-toolbox
+      ports:
+        - port: 8000
+          protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -71,9 +84,8 @@ metadata:
     app.kubernetes.io/name: allow-scrape-from-prometheus
     app.kubernetes.io/part-of: llm-runtime
 spec:
-  # The Prometheus pod scrapes DCGM (9400), the vLLM runtimes (8000), and itself
-  # (9090). Selecting the exporter + prometheus and allowing ingress only from
-  # the prometheus pod keeps the metrics plane closed to everything else.
+  # Prometheus and Alloy scrape DCGM (9400); Alloy also scrapes Prometheus (9090).
+  # Keep the metrics plane restricted to the namespace-local collectors.
   podSelector:
     matchExpressions:
       - key: app.kubernetes.io/name
@@ -86,6 +98,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
       ports:
         - protocol: TCP
           port: 9400

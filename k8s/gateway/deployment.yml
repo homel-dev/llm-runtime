@@ -300,8 +300,20 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alloy
       ports:
         - { protocol: TCP, port: 9091 }
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kex
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: kex-toolbox
+      ports:
+      - { protocol: TCP, port: 8000 }
   egress:
     - to:
         - namespaceSelector:

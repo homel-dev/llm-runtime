@@ -6,3 +6,6 @@ metadata:
   labels:
     app.kubernetes.io/name: llm-runtime
     app.kubernetes.io/part-of: llm-runtime
+    observability.homel.dev/telemetry-consumer: "true"
+    observability.homel.dev/project: llm-runtime
+    observability.homel.dev/local-alloy: "true"

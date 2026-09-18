@@ -10,9 +10,7 @@ resources:
   - prometheus/deployment.yml
   - prometheus/service.yml
 
-  - tempo
-  - loki
-  - otel-collector
+  - alloy/alloy.yml
 
   - exporters/dcgm/daemonset.yml
   - exporters/dcgm/service.yml
