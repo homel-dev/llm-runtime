@@ -299,9 +299,6 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: prometheus
-        - podSelector:
-            matchLabels:
               app.kubernetes.io/name: alloy
       ports:
         - { protocol: TCP, port: 9091 }

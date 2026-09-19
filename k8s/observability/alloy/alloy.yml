@@ -134,10 +134,35 @@ data:
       }
     }
 
-    prometheus.remote_write "local" {
-      endpoint {
-        url = "http://prometheus.llm-runtime.svc.cluster.local:9090/api/v1/write"
+    prometheus.exporter.blackbox "omniroute" {
+      config = "{ modules: { http_2xx: { prober: http, timeout: 5s, http: { method: GET, preferred_ip_protocol: ip4, fail_if_not_ssl: false } } } }"
+
+      target {
+        name    = "omniroute-blackbox"
+        address = "http://llm-openai-api-gateway-omniroute.llm-runtime.svc.cluster.local:8000/healthz"
+        module  = "http_2xx"
+        labels = {
+          project   = "llm-runtime",
+          namespace = "llm-runtime",
+          service   = "omniroute",
+          subsystem = "llm-runtime",
+          component = "omniroute",
+        }
       }
+    }
+
+    discovery.relabel "omniroute_blackbox" {
+      targets = prometheus.exporter.blackbox.omniroute.targets
+
+      rule {
+        source_labels = ["__param_target"]
+        target_label  = "instance"
+      }
+    }
+
+    prometheus.scrape "omniroute_blackbox" {
+      targets    = discovery.relabel.omniroute_blackbox.output
+      forward_to = [prometheus.remote_write.oco.receiver]
     }
 
     prometheus.scrape "alloy_self" {
@@ -148,19 +173,6 @@ data:
           "project"     = "llm-runtime",
           "namespace"   = "llm-runtime",
           "service"     = "alloy",
-        },
-      ]
-      forward_to = [prometheus.remote_write.oco.receiver]
-    }
-
-    prometheus.scrape "prometheus" {
-      targets = [
-        {
-          "__address__" = "prometheus.llm-runtime.svc.cluster.local:9090",
-          "job"         = "prometheus",
-          "project"     = "llm-runtime",
-          "namespace"   = "llm-runtime",
-          "service"     = "prometheus",
         },
       ]
       forward_to = [prometheus.remote_write.oco.receiver]
@@ -316,10 +328,7 @@ data:
     }
 
     otelcol.exporter.prometheus "omniroute" {
-      forward_to = [
-        prometheus.remote_write.local.receiver,
-        prometheus.remote_write.oco.receiver,
-      ]
+      forward_to = [prometheus.remote_write.oco.receiver]
     }
 
     otelcol.processor.transform "identity" {
@@ -470,34 +479,6 @@ spec:
     - name: otlp-http
       port: 4318
       targetPort: otlp-http
----
-# Compatibility alias for existing OTLP producers and the phase-1 local
-# Prometheus config. The legacy otel-collector Deployment is removed, but its
-# Service name remains stable and now resolves to Alloy.
-apiVersion: v1
-kind: Service
-metadata:
-  name: otel-collector
-  namespace: llm-runtime
-  labels:
-    app.kubernetes.io/name: alloy
-    app.kubernetes.io/component: telemetry-compat
-spec:
-  selector:
-    app.kubernetes.io/name: alloy
-  ports:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: otlp-grpc
-    - name: otlp-http
-      port: 4318
-      targetPort: otlp-http
-    - name: metrics
-      port: 8888
-      targetPort: http
-    - name: runtime-metrics
-      port: 8889
-      targetPort: http
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -21,7 +21,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: blackbox-exporter
+              app.kubernetes.io/name: alloy
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: runtime-operator-check

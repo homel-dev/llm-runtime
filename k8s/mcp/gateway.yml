@@ -44,7 +44,7 @@ spec:
           sinks:
             - type: OpenTelemetry
               openTelemetry:
-                host: otel-collector.llm-runtime.svc.cluster.local
+                host: alloy.llm-runtime.svc.cluster.local
                 port: 4317
                 resources:
                   service.name: llm-runtime-mcp
@@ -54,7 +54,7 @@ spec:
       provider:
         type: OpenTelemetry
         backendRefs:
-          - name: otel-collector
+          - name: alloy
             port: 4317
       customTags:
         component:

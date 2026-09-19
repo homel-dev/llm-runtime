@@ -5,17 +5,7 @@ kind: Kustomization
 namespace: llm-runtime
 
 resources:
-
-  - prometheus/configmap.yml
-  - prometheus/deployment.yml
-  - prometheus/service.yml
-
   - alloy/alloy.yml
-
-  - blackbox/configmap.yml
-  - blackbox/deployment.yml
-  - blackbox/service.yml
-
   - exporters/dcgm/daemonset.yml
   - exporters/dcgm/service.yml
 

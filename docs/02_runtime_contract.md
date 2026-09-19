@@ -229,8 +229,8 @@ consumer policy authority to the runtime.
 - runtime NetworkPolicy and gateway-specific consumer RBAC;
 - gateway CI image build and publication;
 - runtime health and metrics endpoints;
-- Prometheus and DCGM infrastructure;
-- OCO datasource and dashboard publication;
+- Alloy and DCGM telemetry collection;
+- forwarding telemetry to the OCO shared backends;
 - operational tasks for deployment, validation, diagnostics, and rollback.
 
 The runtime does not decide which project role should use which model.
@@ -307,7 +307,7 @@ contract version bump while the stable interface remains intact:
 - container image implementation;
 - backend loopback ports;
 - OAuth or PVC on-disk layout;
-- Prometheus scrape implementation;
+- telemetry scrape implementation;
 - CI action versions.
 
 [Back to top](#runtime-contract)

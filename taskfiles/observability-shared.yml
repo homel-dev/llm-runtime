@@ -2,44 +2,25 @@ version: "3"
 
 tasks:
   deploy:
-    desc: Deploy namespace-local Alloy while retaining local Prometheus during phase 1
+    desc: Deploy namespace-local Alloy and DCGM telemetry collectors
     cmds:
       - kubectl apply -f k8s/namespace.yml
       - kubectl apply -k k8s/observability
+      - kubectl -n llm-runtime rollout restart daemonset/alloy
       - kubectl -n llm-runtime rollout status daemonset/alloy --timeout=180s
-      - kubectl -n llm-runtime rollout restart deployment/prometheus
-      - kubectl -n llm-runtime rollout status deployment/prometheus --timeout=120s
+      - kubectl -n llm-runtime rollout status daemonset/dcgm-exporter --timeout=180s
 
   smoke:
-    desc: Verify metrics, logs, and traces reach the shared OCO backends through local Alloy
+    desc: Verify metrics, logs, and traces reach the shared OCO backends through Alloy
     cmds:
       - ./scripts/observability-shared-smoke.sh
 
-  migrate:
-    desc: Deploy Alloy, prove shared-backend parity, then remove legacy local telemetry backends
-    cmds:
-      - task: deploy
-      - task: smoke
-      - task: legacy:delete
-      - task: :oco-consumer:deploy
-
-  legacy:delete:
-    desc: Delete local Tempo, Loki, and OTel Collector workloads after shared-backend smoke passes
-    cmds:
-      - kubectl -n llm-runtime delete deployment/tempo service/tempo --ignore-not-found=true
-      - kubectl -n llm-runtime delete deployment/loki service/loki --ignore-not-found=true
-      - kubectl -n llm-runtime delete deployment/otel-collector --ignore-not-found=true
-      - kubectl -n llm-runtime delete configmap/llmrun-tempo-config configmap/tempo-config configmap/loki-config configmap/llmrun-otel-collector-config configmap/otel-collector-config --ignore-not-found=true
-      - kubectl -n llm-runtime delete networkpolicy/llmrun-tempo-ingress networkpolicy/llmrun-loki-ingress networkpolicy/llmrun-otel-collector --ignore-not-found=true
-      - 'echo "Preserved compatibility service: otel-collector -> Alloy"'
-      - 'echo "Preserved rollback PVCs: tempo-data, loki-data"'
-
   status:
-    desc: Show phase-1 local telemetry collectors and compatibility ingress
+    desc: Show namespace-local Alloy and DCGM telemetry resources
     cmds:
-      - kubectl -n llm-runtime get daemonset/alloy deployment/prometheus daemonset/dcgm-exporter
-      - kubectl -n llm-runtime get service/alloy service/otel-collector service/prometheus service/dcgm-exporter
-      - kubectl -n llm-runtime get configmap/alloy-config configmap/prometheus-config
+      - kubectl -n llm-runtime get daemonset/alloy daemonset/dcgm-exporter
+      - kubectl -n llm-runtime get service/alloy service/dcgm-exporter
+      - kubectl -n llm-runtime get configmap/alloy-config
 
   logs:
     desc: Follow namespace-local Alloy logs

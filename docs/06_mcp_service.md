@@ -469,14 +469,12 @@ MCP Client
 
 Trace context SHOULD propagate into a backend when supported.
 
-The MCP ingress should integrate with the existing runtime observability stack:
+Envoy metrics are scraped by namespace-local Alloy. Envoy access logs and traces
+are exported by OTLP directly to `alloy.llm-runtime.svc.cluster.local`. Alloy
+forwards metrics, logs, and traces to the OCO shared backends.
 
-```text
-Prometheus
-Grafana / OCO
-Tempo
-Loki where applicable
-```
+There is no MCP-local Prometheus, OTel Collector, Loki, Tempo, or Grafana
+provisioning in `llm-runtime`.
 
 Exact metric names are implementation details and MUST be validated against the pinned Envoy AI Gateway release.
 

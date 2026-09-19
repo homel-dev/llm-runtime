@@ -363,66 +363,37 @@ implicit recovery action.
 
 ## Observability
 
-The gateway exposes Prometheus metrics on dedicated TCP/9091. RR consumers are
-allowed only to TCP/8000; gateway NetworkPolicy permits TCP/9091 from runtime
-Prometheus.
+The gateway exposes Prometheus-format metrics on dedicated TCP/9091. RR
+consumers are allowed only to TCP/8000; the gateway NetworkPolicy permits
+TCP/9091 scraping from Alloy.
 
-Prometheus job `llm-gateway` scrapes `:9091/metrics`. Exported metrics include:
+Alloy scrapes the gateway metrics endpoint and forwards the resulting series to
+OCO VictoriaMetrics. Exported metrics include request totals, latency,
+in-flight requests, transport errors/timeouts, traffic, policy rejections,
+configured backends/models, last success/error state, uptime, and RSS.
 
-- request totals by backend, model, and status;
-- request-duration histogram;
-- in-flight requests;
-- upstream transport errors and timeouts;
-- request and response byte counters;
-- local policy rejections by reason;
-- configured backend and model gauges;
-- last request success, last response status, and last success/error timestamps;
-- gateway process uptime and RSS.
+OmniRoute sends OTLP/HTTP traces directly to Alloy with
+`service.name=llm-runtime-omniroute`. Alloy forwards the original traces to OCO
+Tempo and derives bounded `omniroute_*` RED metrics with provider, model,
+routing outcome, HTTP status, and fallback dimensions. Those metrics are written
+only to OCO VictoriaMetrics. OmniRoute Pod stdout/stderr is forwarded to
+VictoriaLogs.
 
-The OCO consumer contract publishes `LLM Runtime Gateway`
-(`uid=llm-runtime-gateway`) for gateway health, request rate, p95 latency,
-errors and timeouts, last-success age, traffic, policy rejections, and process
-memory.
+OmniRoute service availability is measured by the embedded Alloy blackbox
+exporter against `/healthz` using job `omniroute-blackbox`. The heavier
+`/api/monitoring/health` endpoint remains an explicit operator check through
+`task omniroute:deep-health`.
 
-The parallel OmniRoute endpoint has its own telemetry path and dashboard.
-OmniRoute exports routing events as OTLP/HTTP traces to the runtime Alloy
-collector with `service.name=llm-runtime-omniroute`. Alloy forwards the original
-traces to OCO/Tempo and derives bounded RED metrics from only those OmniRoute
-spans with `otelcol.connector.spanmetrics`. Generated metrics are written to the
-local Prometheus remote-write receiver and to the OCO metrics backend. They
-include request count and duration, with provider, model, routing outcome, HTTP
-status, and fallback dimensions. OmniRoute Pod stdout/stderr continues through
-the runtime Alloy log pipeline.
-
-OmniRoute does not currently expose a native Prometheus `/metrics` endpoint for
-these routing events. Availability of the parallel Service is therefore measured
-independently by Prometheus Blackbox Exporter against `/healthz` using job
-`omniroute-blackbox`. The heavier `/api/monitoring/health` endpoint is reserved
-for explicit operator checks (`task omniroute:deep-health`) and is not used as a
-10-second scrape target.
-
-The OCO consumer contract additionally publishes `LLM Runtime · OmniRoute`
-(`uid=llm-runtime-omniroute`) with endpoint availability, request and failure
-rates, fallback rate, p50/p95/p99 request latency, provider/model traffic, routed
-HTTP status, Pod logs, and Tempo routing traces.
-
-Reconcile monitoring with:
+Runtime telemetry lifecycle:
 
 ```bash
-task gateway:observability:deploy
-task omniroute:observability:deploy
+task obs:deploy
+task obs:status
+task obs:smoke
 ```
 
-Validate the metrics path with:
-
-```bash
-task gateway:metrics
-task observability:targets JOB=gateway
-task observability:up JOB=gateway
-task observability:targets JOB=omniroute
-task observability:up JOB=omniroute
-task omniroute:observability:check
-```
+Dashboard and datasource provisioning is owned by the OCO repository, not by
+`llm-runtime`.
 
 Telemetry is passive. During an idle period, expired credentials can remain
 undetected until traffic or an explicit provider check exercises them.

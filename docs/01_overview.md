@@ -86,15 +86,14 @@ workflows, policies, persistence, or authority.
 
 ### Observable infrastructure
 
-Local inference and gateway behavior are exported to Prometheus. OmniRoute
-routing events are exported as OTLP traces through Alloy and converted to
-span-derived RED metrics, while its parallel Service is independently blackbox
-probed. OCO/Grafana consumes runtime-owned datasource and dashboard contracts.
+Alloy is the namespace-local telemetry collector. It scrapes Prometheus-format
+endpoints, receives OTLP from MCP and OmniRoute, performs the OmniRoute blackbox
+probe, and forwards metrics, logs, and traces to the shared OCO backends.
 
 ### Explicit lifecycle boundaries
 
-Local inference, gateway, observability, and OCO consumer resources have
-separate deployment lifecycles. The operator decides which lifecycle to apply.
+Local inference, gateways, MCP, and telemetry collection have separate
+lifecycles. OCO owns shared telemetry storage and Grafana presentation.
 Failure in one lifecycle does not authorize another lifecycle to change
 consumer policy.
 
@@ -117,7 +116,7 @@ flowchart LR
         S[llm-small]
         L[llm-large]
         M[MCP Gateway]
-        A[Alloy / Prometheus]
+        A[Alloy / DCGM]
     end
 
     P1[ChatGPT / Codex]
@@ -298,8 +297,8 @@ Consumer projects own:
 - subscription auth PVCs and login helpers;
 - gateway image build and publication;
 - runtime NetworkPolicy and gateway consumer RBAC;
-- Prometheus and DCGM runtime telemetry;
-- OCO datasource and dashboard publication;
+- Alloy and DCGM runtime telemetry collection;
+- forwarding runtime telemetry to OCO shared backends;
 - runtime deployment and diagnostics tooling.
 
 **Invariant:** `llm-runtime` owns model and provider infrastructure; consumers
@@ -314,15 +313,15 @@ own application meaning and authority.
 Local inference Pods carry `app.kubernetes.io/component: inference`.
 
 The active general runtime NetworkPolicy permits local inference TCP/8000 from
-the LLM gateway and runtime Prometheus. Consumer workloads therefore use the LLM
-gateway rather than receiving direct local inference access from that policy.
+the LLM gateway and Alloy. Consumer workloads therefore use the LLM gateway
+rather than receiving direct local inference access from that policy.
 
 The LLM gateway has separate ingress and egress policy for approved RR agent
-Pods, runtime Prometheus, local inference upstreams, DNS, and required public
-provider endpoints.
+Pods, Alloy metrics scraping, local inference upstreams, DNS, and required
+public provider endpoints.
 
 The MCP gateway has separate policy for approved RR agent Pods, the runtime
-operator-check Pod, metrics, DNS, Memory Steward TCP/8081, and runtime telemetry.
+operator-check Pod, Alloy metrics/OTLP traffic, DNS, and Memory Steward TCP/8081.
 
 A backend-side NetworkPolicy in namespace `ms` permits Memory Steward ingress
 from the runtime MCP gateway data-plane Pods.
@@ -336,36 +335,25 @@ contract.
 
 ## 9. Observability Model
 
-Runtime metric production and storage are owned by `llm-runtime`. OCO/Grafana
-consumes ConfigMaps under `k8s/oco-consumer/` for presentation.
+`llm-runtime` owns telemetry collection only. OCO owns shared telemetry storage,
+querying, and Grafana presentation.
 
-Prometheus jobs include:
+Alloy scrapes local inference `/metrics`, gateway TCP/9091, MCP Envoy
+`/stats/prometheus`, DCGM TCP/9400, and its own metrics. The embedded Alloy
+blackbox exporter probes the OmniRoute `/healthz` endpoint. MCP and OmniRoute
+send OTLP directly to `alloy.llm-runtime.svc.cluster.local`.
 
-```text
-vllm-small
-vllm-medium
-vllm-large
-llm-gateway
-omniroute-blackbox
-dcgm-exporter
-```
+Alloy forwards metrics to OCO VictoriaMetrics, logs to VictoriaLogs, and traces
+to Tempo through the central OCO Alloy ingress. OmniRoute span-derived RED
+metrics are written only to the shared OCO metrics backend.
 
-The gateway exports request volume, backend/model/status dimensions, latency,
-in-flight requests, transport errors and timeouts, policy rejects, traffic
-bytes, last success/error state, uptime, and process RSS on TCP/9091. OmniRoute
-exports routing metadata as OTLP traces to Alloy. Alloy derives `omniroute_*`
-RED metrics with provider/model/outcome/status/fallback dimensions and forwards
-the original traces to OCO/Tempo. The OmniRoute Service itself is monitored by
-`omniroute-blackbox` against `/healthz`, and Pod logs flow through the existing
-Alloy log pipeline.
+There is no namespace-local Prometheus, Tempo, Loki, OTel Collector, standalone
+Blackbox Exporter, or Grafana datasource/dashboard provisioning in
+`llm-runtime`.
 
 Desired State is expressed by manifests and runtime configuration. Observed
 State is produced by Kubernetes status, health checks, and telemetry. A mismatch
 between those states is Drift and requires operator reconciliation.
-
-Runtime observability answers whether model and provider infrastructure is
-healthy and provisioned. Consumer observability answers whether a selected
-runtime service is effective for a project workload.
 
 [Back to top](#shared-llm-runtime-model)
 
@@ -382,8 +370,7 @@ k8s/medium/              retained disabled medium tier
 k8s/large/               active large local tier
 k8s/gateway/             LLM gateway Deployment, Service, PVCs, RBAC, login Pods
 k8s/mcp/                 MCP Gateway API, MCPRoute, backend and network policy
-k8s/observability/       runtime telemetry infrastructure
-k8s/oco-consumer/        Grafana/OCO datasource, dashboards, reader RBAC
+k8s/observability/       Alloy and DCGM telemetry collection
 k8s/runtime-contract.yml stable consumer contract
 scripts/                 runtime, gateway, MCP, and diagnostics helpers
 taskfiles/mcp.yml        MCP lifecycle and validation tasks
@@ -403,8 +390,7 @@ The operator-facing lifecycles are:
 1. local inference and runtime contract through `task up`;
 2. LLM gateway through `task gateway:deploy`;
 3. MCP gateway through `task mcp:deploy`;
-4. observability through `task observability:deploy`;
-5. OCO consumer publication through `task oco-consumer:deploy`.
+4. telemetry collection through `task obs:deploy`.
 
 The root Kustomization includes `small` and `large`. Medium resources remain in
 the repository but are not included in that Desired State.

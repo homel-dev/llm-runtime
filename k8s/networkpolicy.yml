@@ -1,10 +1,4 @@
 # k8s/networkpolicy.yml
-# Fix: the previous single policy used `podSelector: {}` (whole namespace) and
-# opened only port 8000. That put Prometheus (9090) and the DCGM exporter (9400)
-# into default-deny ingress, so OCO Grafana could not reach Prometheus and
-# Prometheus could not scrape DCGM. These three policies restore intent with
-# least privilege: consumers reach the runtime on 8000; OCO Grafana reaches
-# Prometheus on 9090; Prometheus and Alloy scrape runtime metrics.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -15,7 +9,6 @@ metadata:
     app.kubernetes.io/name: allow-runtime-consumers
     app.kubernetes.io/part-of: llm-runtime
 spec:
-  # Only the vLLM inference pods — NOT Prometheus/DCGM.
   podSelector:
     matchLabels:
       app.kubernetes.io/component: inference
@@ -26,9 +19,6 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: llm-openai-api-gateway
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: prometheus
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: alloy
@@ -43,66 +33,28 @@ spec:
             matchLabels:
               app.kubernetes.io/name: kex-toolbox
       ports:
-        - port: 8000
-          protocol: TCP
+        - protocol: TCP
+          port: 8000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-prometheus-from-console
+  name: allow-metrics-scrape
   namespace: llm-runtime
   labels:
-    app.kubernetes.io/name: allow-prometheus-from-console
+    app.kubernetes.io/name: allow-metrics-scrape
     app.kubernetes.io/part-of: llm-runtime
 spec:
-  # OCO Grafana (access: proxy) connects from the observability-console namespace
-  # to prometheus.llm-runtime.svc:9090. Namespaces carry the auto label
-  # kubernetes.io/metadata.name, so no edit to the console namespace is needed.
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/name: dcgm-exporter
   policyTypes:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: observability-console
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: runtime-operator-check
-      ports:
-        - protocol: TCP
-          port: 9090
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-scrape-from-prometheus
-  namespace: llm-runtime
-  labels:
-    app.kubernetes.io/name: allow-scrape-from-prometheus
-    app.kubernetes.io/part-of: llm-runtime
-spec:
-  # Prometheus and Alloy scrape DCGM (9400); Alloy also scrapes Prometheus (9090).
-  # Keep the metrics plane restricted to the namespace-local collectors.
-  podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: ["dcgm-exporter", "prometheus"]
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: prometheus
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: alloy
       ports:
         - protocol: TCP
           port: 9400
-        - protocol: TCP
-          port: 9090

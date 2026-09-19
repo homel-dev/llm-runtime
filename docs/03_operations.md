@@ -150,19 +150,15 @@ Remove shared controllers only through the separately prompted task:
 task mcp:controllers:delete
 ```
 
-### Runtime observability
+### Runtime telemetry
 
 ```bash
-task observability:deploy
-task observability:status
+task obs:deploy
+task obs:status
 ```
 
-### OCO/Grafana consumer contract
-
-```bash
-task oco-consumer:deploy
-task oco-consumer:status
-```
+OCO owns the shared telemetry backends and Grafana presentation. `llm-runtime`
+does not provision OCO dashboards or datasources.
 
 The operator decides which lifecycle to reconcile. Success of one lifecycle
 does not prove success of another.
@@ -361,75 +357,42 @@ optionally invokes retrieval operations.
 
 ## 7. Observability and OCO
 
-Deploy Prometheus, Alloy, Blackbox Exporter, and DCGM exporter:
+`llm-runtime` owns only the namespace-local collectors: Alloy and DCGM exporter.
+OCO owns VictoriaMetrics, VictoriaLogs, Tempo, and Grafana.
+
+Deploy or reload the runtime collectors:
 
 ```bash
-task observability:deploy
+task obs:deploy
 ```
 
-The task reapplies telemetry configuration and restarts Prometheus, Alloy, and
-Blackbox Exporter so changed scrape, OTLP, and spanmetrics configuration is
-loaded. Alloy writes OmniRoute span-derived RED metrics through Prometheus's
-remote-write receiver so they are queryable through the existing
-`llm-runtime-prometheus` datasource.
-
-Inspect targets and health:
+Validate synthetic metrics, logs, and traces end to end through the shared OCO
+backends:
 
 ```bash
-task observability:targets
-task observability:targets JOB=vllm
-task observability:up JOB=vllm
-task observability:targets JOB=gateway
-task observability:up JOB=gateway
-task observability:targets JOB=omniroute
-task observability:up JOB=omniroute
+task obs:smoke
 ```
 
-For the complete OmniRoute telemetry path and dashboard contract:
+Inspect collector state or logs:
 
 ```bash
-task omniroute:observability:deploy
-task omniroute:observability:check
+task obs:status
+task obs:logs
 ```
 
-The availability signal is an HTTP blackbox probe of the parallel `/healthz`
-endpoint. Routing requests emit native OmniRoute OTLP traces. Alloy forwards
-those traces to OCO/Tempo and derives Prometheus RED metrics named under the
-`omniroute_` prefix. OmniRoute Pod logs are collected by the existing Alloy
-Kubernetes log pipeline. The deep management endpoint `/api/monitoring/health`
-is checked only on demand with `task omniroute:deep-health`; it is not scraped
-periodically.
+Alloy scrapes local inference endpoints, gateway TCP/9091, MCP Envoy TCP/19001,
+DCGM TCP/9400, and Alloy itself. Its embedded blackbox exporter probes OmniRoute
+`/healthz`. MCP and OmniRoute send OTLP directly to Alloy on TCP/4317 or
+TCP/4318. OmniRoute span-derived RED metrics are forwarded only to OCO
+VictoriaMetrics.
 
-Publish OCO/Grafana datasource and dashboards:
+There is no local Prometheus, Tempo, Loki, OTel Collector, standalone Blackbox
+Exporter, or llm-runtime-owned Grafana provisioning. Dashboard and datasource
+changes belong to the OCO repository.
 
-```bash
-task oco-consumer:deploy
-task oco-consumer:status
-```
-
-Published dashboards include `LLM Runtime`, `LLM Runtime Gateway`
-(`uid=llm-runtime-gateway`), `LLM Runtime · OmniRoute`
-(`uid=llm-runtime-omniroute`), and `LLM Runtime · MCP Gateway`. The OmniRoute
-dashboard combines blackbox availability, span-derived request/error/latency
-metrics, provider/model and fallback dimensions, VictoriaLogs Pod logs, and
-Tempo routing traces.
-
-Expose Prometheus to the host or LAN when required:
-
-```bash
-task observability:expose-start
-task observability:expose-status
-task observability:urls
-```
-
-Stop the exposure proxy with:
-
-```bash
-task observability:expose-stop
-```
-
-Missing targets, stale success timestamps, or increasing timeout/error counters
-are operational failures and require investigation before accepting a change.
+The OmniRoute deep management endpoint `/api/monitoring/health` remains an
+explicit operator check through `task omniroute:deep-health`; it is not a scrape
+target.
 
 [Back to top](#operations-guide)
 
@@ -467,7 +430,7 @@ Collect:
 ```bash
 task gateway:status
 task gateway:logs
-task observability:gateway-target
+task obs:status
 ```
 
 Distinguish these failure classes:
@@ -487,22 +450,25 @@ Collect:
 
 ```bash
 task gateway:metrics
-task observability:gateway-up
+task obs:status
 ```
 
 Review request-duration histograms, status counters, transport errors and
-timeouts, in-flight requests, and last-success/error timestamps.
+timeouts, in-flight requests, and last-success/error timestamps in the shared
+OCO telemetry backends.
 
-### Prometheus target missing
+### Runtime telemetry missing
 
 Collect:
 
 ```bash
-task observability:targets
-task observability:logs-prometheus
+task obs:status
+task obs:logs
+task obs:smoke
 ```
 
-Verify Service ports, NetworkPolicy, and the loaded Prometheus ConfigMap.
+Verify Service ports, NetworkPolicy, the Alloy ConfigMap, and shared OCO backend
+reachability.
 
 [Back to top](#operations-guide)
 
@@ -516,7 +482,7 @@ Verify Service ports, NetworkPolicy, and the loaded Prometheus ConfigMap.
 2. run `task up`;
 3. wait for readiness;
 4. run model discovery, health, metrics, and smoke checks;
-5. observe Prometheus before accepting the change.
+5. validate the shared OCO telemetry before accepting the change.
 
 If validation fails, stop and use section 10.
 
@@ -529,7 +495,7 @@ If validation fails, stop and use section 10.
 5. deploy that digest;
 6. inspect gateway status;
 7. run provider-specific end-to-end checks;
-8. validate Prometheus target health and OCO signals.
+8. validate Alloy collection and OCO signals.
 
 PR jobs build but cannot publish. Registry write permission exists only on the
 trusted publish job for non-PR events.
@@ -556,7 +522,7 @@ Validate the rollback:
 ```bash
 task gateway:status
 task gateway:check
-task observability:gateway-up
+task obs:smoke
 ```
 
 For local tiers, revert the manifest change and reapply:
@@ -585,8 +551,7 @@ After a Minikube or host restart, inspect each lifecycle independently:
 ```bash
 task status
 task gateway:status
-task observability:status
-task oco-consumer:status
+task obs:status
 ```
 
 Then validate behavior:
@@ -595,11 +560,10 @@ Then validate behavior:
 task llm:health TIER=small
 task llm:health TIER=large
 task gateway:check
-task observability:vllm-up
-task observability:gateway-up
+task obs:smoke
 ```
 
-The root `task up` cannot recreate gateway, MCP, observability, or OCO resources
+The root `task up` cannot recreate gateway, MCP, or observability resources
 because those resources are outside the root Kustomization. If they are absent,
 reconcile their explicit lifecycles.
 
@@ -611,18 +575,17 @@ Do not mark recovery complete from Pod phase alone.
 
 ## 12. Operational Costs and Failure Boundaries
 
-The separated lifecycle model has an operator cost: runtime, gateway,
-observability, and OCO Desired State may require independent reconciliation.
-That separation prevents one deployment command from mutating unrelated
-resources, but recovery requires checking each lifecycle.
+The separated lifecycle model has an operator cost: runtime, gateways, and
+telemetry collection may require independent reconciliation. OCO has its own
+repository and lifecycle for shared storage and presentation.
 
 Subscription-backed providers add an external dependency that local health
 checks cannot validate. End-to-end provider checks consume provider traffic and
 must be run deliberately when authentication or provider availability matters.
 
-Prometheus telemetry is passive. A credential can expire during an idle period
-without producing a provider failure signal until traffic or an explicit check
-uses that credential.
+Telemetry is passive. A credential can expire during an idle period without
+producing a provider failure signal until traffic or an explicit check uses that
+credential.
 
 Operational tooling reports and validates infrastructure state. It does not
 choose consumer fallback policy.
