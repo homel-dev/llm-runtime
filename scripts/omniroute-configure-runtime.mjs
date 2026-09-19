@@ -124,8 +124,8 @@ const aliases = {
   "gemini-subscription-auto": "agy/gemini-3.7-flash-medium",
   "glm-5.3": "glm/glm-5.3",
   "glm-5.3-flash": "glm/glm-5.3-flash",
-  "llm-small": "llama-cpp/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
-  "llm-large": "vllm/Qwen2.5-72B-Instruct-AWQ",
+//  "llm-small": "llama-cpp/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
+//  "llm-large": "vllm/Qwen2.5-72B-Instruct-AWQ",
 };
 
 for (const [from, to] of Object.entries(aliases)) {
