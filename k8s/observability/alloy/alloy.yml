@@ -161,8 +161,10 @@ data:
     }
 
     prometheus.scrape "omniroute_blackbox" {
-      targets    = discovery.relabel.omniroute_blackbox.output
-      forward_to = [prometheus.remote_write.oco.receiver]
+      targets         = discovery.relabel.omniroute_blackbox.output
+      job_name        = "omniroute-blackbox"
+      scrape_interval = "15s"
+      forward_to      = [prometheus.remote_write.oco.receiver]
     }
 
     prometheus.scrape "alloy_self" {
@@ -175,6 +177,7 @@ data:
           "service"     = "alloy",
         },
       ]
+      scrape_interval = "15s"
       forward_to = [prometheus.remote_write.oco.receiver]
     }
 
@@ -186,10 +189,12 @@ data:
           "project"     = "llm-runtime",
           "namespace"   = "llm-runtime",
           "service"     = "llm-small",
+          "component"   = "inference",
           "subsystem"   = "llm-runtime",
           "tier"        = "small",
         },
       ]
+      scrape_interval = "15s"
       forward_to = [prometheus.remote_write.oco.receiver]
     }
 
@@ -201,10 +206,12 @@ data:
           "project"     = "llm-runtime",
           "namespace"   = "llm-runtime",
           "service"     = "llm-large",
+          "component"   = "inference",
           "subsystem"   = "llm-runtime",
           "tier"        = "large",
         },
       ]
+      scrape_interval = "15s"
       forward_to = [prometheus.remote_write.oco.receiver]
     }
 
@@ -220,6 +227,7 @@ data:
           "component"   = "gateway",
         },
       ]
+      scrape_interval = "15s"
       forward_to = [prometheus.remote_write.oco.receiver]
     }
 
@@ -235,6 +243,7 @@ data:
           "component"   = "mcp-gateway",
         },
       ]
+      scrape_interval = "15s"
       metrics_path = "/stats/prometheus"
       forward_to   = [prometheus.remote_write.oco.receiver]
     }
@@ -250,6 +259,7 @@ data:
           "subsystem"   = "gpu",
         },
       ]
+      scrape_interval = "15s"
       forward_to = [prometheus.remote_write.oco.receiver]
     }
 
