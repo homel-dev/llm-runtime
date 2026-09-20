@@ -102,7 +102,7 @@ data:
     }
 
     loki.process "pod_logs" {
-      stage.cri {}
+      stage.docker {}
 
       stage.labels {
         values = {
@@ -457,6 +457,9 @@ spec:
             - name: pod-logs
               mountPath: /var/log/pods
               readOnly: true
+            - name: docker-containers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -466,6 +469,10 @@ spec:
         - name: pod-logs
           hostPath:
             path: /var/log/pods
+            type: Directory
+        - name: docker-containers
+          hostPath:
+            path: /var/lib/docker/containers
             type: Directory
 ---
 apiVersion: v1
