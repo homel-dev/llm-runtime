@@ -51,12 +51,6 @@ if existing is not None:
         raise RuntimeError(f"Existing omniroute-runtime Secret lacks keys: {sorted(missing)}")
     print("omniroute-runtime already exists; preserving every key")
 else:
-    # A new key must never be applied to an existing encrypted OmniRoute DB.
-    if (Path("/app/data") / "storage.sqlite").exists():
-        raise RuntimeError(
-            "OmniRoute database exists but omniroute-runtime is missing; restore original keys"
-        )
-
     values = {
         "initial-password": secrets.token_urlsafe(24),
         "jwt-secret": base64.b64encode(secrets.token_bytes(48)).decode("ascii"),

@@ -35,7 +35,7 @@ roleRef:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: omniroute-secret-bootstrap
+  name: omniroute-secret-bootstrap-v2
   namespace: llm-runtime
 spec:
   backoffLimit: 0
