@@ -1,0 +1,4 @@
+Current index	PCI	UUID
+0	01:00.0	GPU-06c039b0-1d69-52eb-2475-45c1dad81aea	good
+1	81:00.0	GPU-0de7cad3-de92-f02d-31b1-c0400359ef20	good
+2	82:00.0	GPU-0483e19d-6321-b657-1ed6-b262f2789541	not good

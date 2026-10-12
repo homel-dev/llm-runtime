@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +x
 
-kubectl -n llm-runtime rollout status deployment/omniroute --timeout=300s >/dev/null
+namespace="${LLM_RUNTIME_NAMESPACE:-llm-runtime}"
+kubectl_bin="${KUBECTL:-kubectl}"
 
-existing_token="$(kubectl -n llm-runtime get secret omniroute-operator-token -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || true)"
+"$kubectl_bin" -n "$namespace" rollout status deployment/omniroute --timeout=300s >/dev/null
+
+existing_token="$("$kubectl_bin" -n "$namespace" get secret omniroute-operator-token -o jsonpath='{.data.token}' 2>/dev/null | base64 -d || true)"
 if [[ -n "$existing_token" ]]; then
-  if kubectl -n llm-runtime exec deployment/omniroute -c omniroute -- \
+  if "$kubectl_bin" -n "$namespace" exec deployment/omniroute -c omniroute -- \
     env OR_TOKEN="$existing_token" node -e '
 fetch("http://127.0.0.1:20128/api/cli/whoami", {
   headers: { authorization: `Bearer ${process.env.OR_TOKEN}`, accept: "application/json" },
@@ -17,7 +21,7 @@ fetch("http://127.0.0.1:20128/api/cli/whoami", {
   echo "Existing OmniRoute operator token is stale; minting a replacement" >&2
 fi
 
-token="$(kubectl -n llm-runtime exec deployment/omniroute -c omniroute -- node -e '
+token="$("$kubectl_bin" -n "$namespace" exec deployment/omniroute -c omniroute -- node -e '
 const password = process.env.INITIAL_PASSWORD;
 if (!password) {
   console.error("INITIAL_PASSWORD is not set in the OmniRoute container");
@@ -44,8 +48,11 @@ fetch("http://127.0.0.1:20128/api/cli/connect", {
 
 test -n "$token" || { echo "failed to mint OmniRoute operator token" >&2; exit 1; }
 
-kubectl -n llm-runtime create secret generic omniroute-operator-token \
-  --from-literal=token="$token" \
-  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+printf '%s' "$token" \
+  | "$kubectl_bin" -n "$namespace" create secret generic omniroute-operator-token \
+      --from-file=token=/dev/stdin --dry-run=client -o yaml \
+  | "$kubectl_bin" -n "$namespace" apply -f - >/dev/null
 
+stored_token_b64="$("$kubectl_bin" -n "$namespace" get secret/omniroute-operator-token -o jsonpath='{.data.token}')"
+[[ -n "$stored_token_b64" ]] || { echo 'OmniRoute operator token Secret is empty' >&2; exit 1; }
 echo "OmniRoute operator token stored in secret/omniroute-operator-token"

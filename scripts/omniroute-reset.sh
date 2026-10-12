@@ -105,4 +105,9 @@ fi
 # newly initialized DB. Preserve unrelated Codex/Antigravity OAuth PVCs.
 "$kubectl_bin" -n "$namespace" scale deployment/omniroute --replicas=1
 "$kubectl_bin" -n "$namespace" rollout status deployment/omniroute --timeout=300s
-printf '%s\n' 'OmniRoute storage reset completed; new database initialized.'
+
+# Reset removed the old database-backed access token. Recreate the native
+# management token and persist it in Kubernetes, not just in startup's env.
+LLM_RUNTIME_NAMESPACE="$namespace" KUBECTL="$kubectl_bin" \
+  "$(dirname "${BASH_SOURCE[0]}")/omniroute-operator-token.sh"
+printf '%s\n' 'OmniRoute storage reset completed; new database and operator token initialized.'

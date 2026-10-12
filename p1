@@ -1,0 +1,412 @@
+diff --git a/.github/workflows/omniroute-image.yml b/.github/workflows/omniroute-image.yml
+deleted file mode 100644
+index 564b29d..0000000
+--- a/.github/workflows/omniroute-image.yml
++++ /dev/null
+@@ -1,51 +0,0 @@
+-name: OmniRoute image
+-
+-on:
+-  push:
+-    branches: [main]
+-    paths:
+-      - 'omniroute/**'
+-      - '.github/workflows/omniroute-image.yml'
+-  pull_request:
+-    branches: [main]
+-    paths:
+-      - 'omniroute/**'
+-      - '.github/workflows/omniroute-image.yml'
+-  workflow_dispatch:
+-
+-permissions:
+-  contents: read
+-
+-jobs:
+-  image:
+-    name: Build OmniRoute with CLI
+-    runs-on: ubuntu-24.04
+-    permissions:
+-      contents: read
+-      packages: write
+-    steps:
+-      - name: Checkout
+-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+-        with:
+-          persist-credentials: false
+-      - name: Set up Docker Buildx
+-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+-      - name: Log in to GHCR
+-        if: github.event_name != 'pull_request'
+-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+-        with:
+-          registry: ghcr.io
+-          username: ${{ github.actor }}
+-          password: ${{ secrets.GITHUB_TOKEN }}
+-      - name: Build and publish
+-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+-        with:
+-          context: ./omniroute
+-          file: ./omniroute/Dockerfile
+-          platforms: linux/amd64
+-          push: ${{ github.event_name != 'pull_request' }}
+-          tags: ghcr.io/${{ github.repository_owner }}/llm-runtime-omniroute:main
+-          cache-from: type=gha,scope=llm-runtime-omniroute
+-          cache-to: type=gha,mode=max,scope=llm-runtime-omniroute
+-          sbom: true
+-          provenance: mode=max
+diff --git a/k8s/gitops/omniroute/kustomization.yml b/k8s/gitops/omniroute/kustomization.yml
+index 01dc15e..becadf7 100644
+--- a/k8s/gitops/omniroute/kustomization.yml
++++ b/k8s/gitops/omniroute/kustomization.yml
+@@ -18,5 +18,5 @@ generatorOptions:
+   disableNameSuffixHash: false
+ images:
+   - name: omniroute
+-    newName: ghcr.io/homel-dev/llm-runtime-omniroute
+-    newTag: main
++    newName: docker.io/diegosouzapw/omniroute
++    newTag: next
+diff --git a/k8s/gitops/omniroute/manage.mjs b/k8s/gitops/omniroute/manage.mjs
+index b362107..a26a0e5 100644
+--- a/k8s/gitops/omniroute/manage.mjs
++++ b/k8s/gitops/omniroute/manage.mjs
+@@ -1,19 +1,31 @@
+-// Thin caller for OmniRoute endpoints which its native CLI does not expose:
+-// importing existing OAuth credential files, aliases and the initial CLI token.
+-// Provider CRUD for API keys stays in the official OmniRoute CLI.
++// Thin idempotent caller for the native OmniRoute management REST API.
++// No custom provider schema, separate binary, or CLI runtime dependencies.
+ import { readFileSync } from 'node:fs';
+ import { setTimeout as sleep } from 'node:timers/promises';
+ 
+ const base = (process.env.OR_BASE_URL || 'http://127.0.0.1:20128').replace(/\/$/, '');
+ const [operation, ...args] = process.argv.slice(2);
++const requestTimeout = Number(process.env.OR_REQUEST_TIMEOUT_MS || 15000);
++if (!Number.isInteger(requestTimeout) || requestTimeout < 1000 || requestTimeout > 120000) {
++  throw new Error('OR_REQUEST_TIMEOUT_MS must be between 1000 and 120000');
++}
++
++function localUrl(endpoint) {
++  if (!endpoint.startsWith('/') || endpoint.startsWith('//')) {
++    throw new Error('Only local API paths are allowed');
++  }
++  const url = new URL(endpoint, base);
++  if (url.origin !== new URL(base).origin) throw new Error('Cross-origin management call refused');
++  return url;
++}
+ 
+ async function api(method, endpoint, body, token = process.env.OMNIROUTE_API_KEY) {
+   const headers = { accept: 'application/json' };
+   if (token) headers.authorization = `Bearer ${token}`;
+   if (body !== undefined) headers['content-type'] = 'application/json';
+-  const response = await fetch(new URL(endpoint, base), {
++  const response = await fetch(localUrl(endpoint), {
+     method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+-    signal: AbortSignal.timeout(15000),
++    signal: AbortSignal.timeout(requestTimeout),
+   });
+   // Never print server error bodies; OAuth imports may include credential data.
+   if (!response.ok) throw new Error(`${method} ${endpoint}: HTTP ${response.status}`);
+@@ -61,20 +73,37 @@ async function main() {
+       process.stdout.write(body.token);
+       return;
+     }
+-    case 'find': {
+-      const [provider, name] = args;
++    case 'upsert-key': {
++      const [provider, name, model, keyEnv] = args;
++      if (!provider || !name || !keyEnv || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyEnv)) {
++        throw new Error('upsert-key requires provider, name, model, and credential env name');
++      }
++      const apiKey = process.env[keyEnv];
++      if (!apiKey) throw new Error(`Required credential environment variable ${keyEnv} is unset`);
+       const matches = (await list()).filter(c => c.provider === provider && c.name === name);
+       if (matches.length > 1) throw new Error(`Ambiguous connection: ${provider}/${name}`);
+-      if (matches.length === 1) process.stdout.write(String(matches[0].id));
++      const data = { apiKey, ...(model ? { defaultModel: model } : {}) };
++      if (matches.length) {
++        await api('PUT', `/api/providers/${encodeURIComponent(matches[0].id)}`, data);
++        console.log(`omniroute-config: updated ${provider}/${name}`);
++      } else {
++        const result = await api('POST', '/api/providers', { provider, name, ...data });
++        if (result.connection?.provider !== provider || result.connection?.name !== name) {
++          throw new Error(`Unexpected create response for ${provider}/${name}`);
++        }
++        console.log(`omniroute-config: created ${provider}/${name}`);
++      }
+       return;
+     }
+     case 'import-oauth': {
+       const [provider, name, authFile, endpoint] = args;
+-      const exists = (await list()).some(c => c.provider === provider);
+-      if (exists) {
+-        console.log(`omniroute-config: existing ${provider} OAuth session preserved`);
++      const matches = (await list()).filter(c => c.provider === provider);
++      if (matches.length) {
++        console.log(`omniroute-config: existing ${provider} OAuth connection(s) preserved (${matches.length})`);
+         return;
+       }
++      if (!name || !authFile || !endpoint) throw new Error('import-oauth requires name, file and API path');
++      localUrl(endpoint); // Check the destination before reading credentials.
+       let raw = readFileSync(authFile, 'utf8').trim();
+       // Antigravity CLI may store JSON behind its documented keyring-base64 prefix.
+       if (raw.startsWith('go-keyring-base64:')) {
+diff --git a/k8s/gitops/omniroute/startup.sh b/k8s/gitops/omniroute/startup.sh
+index b9a8905..dd2e075 100644
+--- a/k8s/gitops/omniroute/startup.sh
++++ b/k8s/gitops/omniroute/startup.sh
+@@ -1,12 +1,20 @@
+ #!/bin/sh
+-# Native OmniRoute startup configuration. Set overrides in deployment.yml.
+-# This script runs in the server container's postStart hook, NOT in another proxy.
++# OmniRoute startup configuration through the built-in management REST API.
++# Override inputs with env vars; runs in the server container postStart hook.
+ set -eu
+ 
++# postStart hook output is not automatically part of the container log stream.
++# Redirect to the OmniRoute process streams only inside its Pod.
++if [ "${OR_LOG_TO_PID1:-0}" = 1 ]; then
++  exec >/proc/1/fd/1 2>/proc/1/fd/2
++fi
++
+ : "${OR_BASE_URL:=http://127.0.0.1:20128}"
+-: "${OR_CLI:=/app/bin/omniroute.mjs}"
+ : "${OR_WAIT_SECONDS:=240}"
+ : "${OR_WAIT_INTERVAL:=3}"
++: "${OR_MANAGE_SCRIPT:=/etc/omniroute-startup/manage.mjs}"
++: "${OR_REQUEST_TIMEOUT_MS:=15000}"
++export OR_REQUEST_TIMEOUT_MS
+ 
+ # Native provider IDs, connection names and models.
+ : "${OR_CODEX_PROVIDER:=codex}"
+@@ -41,8 +49,7 @@ set -eu
+ : "${OR_GLM_FLASH_ALIAS:=glm-5.3-flash}"
+ : "${OR_GLM_FLASH_TARGET:=glm/glm-5.3-flash}"
+ 
+-helper() { node /etc/omniroute-startup/manage.mjs "$@"; }
+-cli() { node "$OR_CLI" --base-url "$OR_BASE_URL" "$@"; }
++helper() { node "$OR_MANAGE_SCRIPT" "$@"; }
+ 
+ printf '%s\n' 'omniroute-config: waiting for local management API'
+ helper wait "$OR_WAIT_SECONDS" "$OR_WAIT_INTERVAL"
+@@ -52,35 +59,8 @@ OMNIROUTE_API_KEY="$(helper token)"
+ export OMNIROUTE_API_KEY
+ [ -n "$OMNIROUTE_API_KEY" ] || { echo 'omniroute-config: no management token' >&2; exit 1; }
+ 
+-require_key() {
+-  key_name="$1"
+-  node -e '
+-    const name = process.argv[1];
+-    if (!/^[A-Z_][A-Z0-9_]*$/.test(name) || !process.env[name]) {
+-      console.error(`omniroute-config: required ${name} is missing`);
+-      process.exit(1);
+-    }
+-  ' "$key_name"
+-}
+-
+ upsert_key_provider() {
+-  provider="$1"; name="$2"; model="$3"; key_env="$4"
+-  require_key "$key_env"
+-  existing_id="$(helper find "$provider" "$name")"
+-  if [ -n "$existing_id" ]; then
+-    if [ -n "$model" ]; then
+-      cli providers edit "$existing_id" --default-model "$model" --credential-env "$key_env"
+-    else
+-      cli providers edit "$existing_id" --credential-env "$key_env"
+-    fi
+-  else
+-    if [ -n "$model" ]; then
+-      cli providers add "$provider" --name "$name" --default-model "$model" --credential-env "$key_env" --yes
+-    else
+-      cli providers add "$provider" --name "$name" --credential-env "$key_env" --yes
+-    fi
+-  fi
+-  printf 'omniroute-config: API key provider %s configured\n' "$provider"
++  helper upsert-key "$1" "$2" "$3" "$4"
+ }
+ 
+ # Import existing OAuth sessions once. Do not replace refreshed token families
+diff --git a/k8s/omniroute/deployment.yml b/k8s/omniroute/deployment.yml
+index bceea75..daf5848 100644
+--- a/k8s/omniroute/deployment.yml
++++ b/k8s/omniroute/deployment.yml
+@@ -30,8 +30,6 @@ spec:
+         fsGroup: 1000
+         seccompProfile:
+           type: RuntimeDefault
+-      imagePullSecrets:
+-        - name: ghcr-pull-secret
+       containers:
+         - name: omniroute
+           image: omniroute:dev
+@@ -58,8 +56,8 @@ spec:
+             # All startup configuration inputs; defaults and explanations live
+             # at the top of k8s/gitops/omniroute/startup.sh.
+             - { name: OR_BASE_URL, value: "http://127.0.0.1:20128" }
+-            - { name: OR_CLI, value: /app/bin/omniroute.mjs }
+             - { name: OR_WAIT_SECONDS, value: "240" }
++            - { name: OR_LOG_TO_PID1, value: "1" }
+             - name: OR_MANAGEMENT_TOKEN
+               valueFrom:
+                 secretKeyRef: { name: omniroute-operator-token, key: token, optional: true }
+diff --git a/omniroute/Dockerfile b/omniroute/Dockerfile
+deleted file mode 100644
+index fcbcc56..0000000
+--- a/omniroute/Dockerfile
++++ /dev/null
+@@ -1,19 +0,0 @@
+-# Upstream Docker runtime includes /app/bin/omniroute.mjs, but its CLI
+-# needs tsx/esm (omitted from the runtime image; upstream issue #12152).
+-# Do not replace the upstream CLI or build a second CLI distribution.
+-ARG OMNIROUTE_VERSION=3.8.51
+-FROM docker.io/diegosouzapw/omniroute:${OMNIROUTE_VERSION}
+-USER root
+-WORKDIR /app
+-# Install ONLY the CLI loader in an isolated npm prefix. Installing from /app
+-# resolves the entire upstream dependency tree and can fail on unrelated packages.
+-# The symlink makes the official CLI's import("tsx/esm") resolve normally;
+-# tsx's own dependencies are resolved within the isolated prefix.
+-RUN mkdir -p /opt/omniroute-cli \
+-    && npm install --prefix /opt/omniroute-cli \
+-         --no-save --no-package-lock --ignore-scripts \
+-         tsx@4.23.12 \
+-    && test ! -e /app/node_modules/tsx \
+-    && ln -s /opt/omniroute-cli/node_modules/tsx /app/node_modules/tsx \
+-    && node /app/bin/omniroute.mjs --help >/dev/null
+-USER node
+diff --git a/tests/omniroute-startup.test.mjs b/tests/omniroute-startup.test.mjs
+new file mode 100644
+index 0000000..3bc6d3c
+--- /dev/null
++++ b/tests/omniroute-startup.test.mjs
+@@ -0,0 +1,128 @@
++import assert from 'node:assert/strict';
++import { createServer } from 'node:http';
++import { spawn } from 'node:child_process';
++import { mkdtemp, writeFile, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join, resolve } from 'node:path';
++import { test } from 'node:test';
++
++const startup = resolve('k8s/gitops/omniroute/startup.sh');
++const manage = resolve('k8s/gitops/omniroute/manage.mjs');
++
++function run(command, args, env) {
++  return new Promise((resolveRun, reject) => {
++    const proc = spawn(command, args, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
++    let stdout = '';
++    let stderr = '';
++    proc.stdout.on('data', chunk => { stdout += chunk; });
++    proc.stderr.on('data', chunk => { stderr += chunk; });
++    proc.once('error', reject);
++    proc.once('close', code => resolveRun({ code, stdout, stderr }));
++  });
++}
++
++test('startup imports native OAuth credentials once, upserts API keys, and keeps aliases idempotent', async t => {
++  const dir = await mkdtemp(join(tmpdir(), 'omniroute-config-'));
++  t.after(() => rm(dir, { recursive: true, force: true }));
++  await writeFile(join(dir, 'codex.json'), JSON.stringify({ tokens: { access_token: 'codex-private', refresh_token: 'codex-refresh' } }));
++  await writeFile(join(dir, 'agy.json'), JSON.stringify({ token: { access_token: 'agy-private', refresh_token: 'agy-refresh' } }));
++  const connections = [];
++  const aliases = {};
++  const events = [];
++  const api = createServer(async (req, res) => {
++    let raw = '';
++    for await (const chunk of req) raw += chunk;
++    const body = raw ? JSON.parse(raw) : {};
++    const url = new URL(req.url, 'http://localhost');
++    const path = url.pathname;
++    const reply = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
++    if (path === '/healthz') return reply(200, { ok: true });
++    if (path === '/api/cli/connect' && req.method === 'POST') {
++      assert.equal(body.password, 'operator-secret');
++      events.push('token');
++      return reply(200, { token: 'startup-bearer' });
++    }
++    if (req.headers.authorization !== 'Bearer startup-bearer') return reply(401, { error: 'unauthorized' });
++    if (path === '/api/providers' && req.method === 'GET') return reply(200, { connections });
++    if (path.startsWith('/api/providers/') && path.endsWith('/import') && req.method === 'POST') {
++      const provider = path.includes('/codex-') ? 'codex' : 'agy';
++      events.push(`oauth:${provider}`);
++      assert.equal(body.overwriteExisting, false);
++      assert.equal(body.source.kind, 'json');
++      const connection = { provider, name: body.name, id: String(connections.length + 1) };
++      connections.push(connection);
++      return reply(200, { connection });
++    }
++    if (path === '/api/providers' && req.method === 'POST') {
++      events.push(`create:${body.provider}`);
++      const connection = { provider: body.provider, name: body.name, id: String(connections.length + 1), defaultModel: body.defaultModel };
++      connections.push(connection);
++      return reply(200, { connection });
++    }
++    if (path.startsWith('/api/providers/') && req.method === 'PUT') {
++      events.push(`update:${path.split('/').pop()}`);
++      assert.ok(body.apiKey);
++      return reply(200, { success: true });
++    }
++    if (path === '/api/settings/model-aliases' && req.method === 'GET') return reply(200, { custom: aliases });
++    if (path === '/api/settings/model-aliases' && req.method === 'POST') {
++      events.push(`alias:${body.from}`);
++      aliases[body.from] = body.to;
++      return reply(200, { success: true });
++    }
++    return reply(404, { error: `${req.method} ${path}` });
++  });
++  await new Promise((resolveServer, reject) => api.once('error', reject).listen(0, '127.0.0.1', resolveServer));
++  t.after(() => api.close());
++  const port = api.address().port;
++  const env = {
++    OR_BASE_URL: `http://127.0.0.1:${port}`, OR_MANAGE_SCRIPT: manage,
++    INITIAL_PASSWORD: 'operator-secret', ZAI_API_KEY: 'zai-private', OPENCODE_API_KEY: 'zen-private',
++    OR_CODEX_AUTH_FILE: join(dir, 'codex.json'), OR_AGY_AUTH_FILE: join(dir, 'agy.json'),
++    OR_WAIT_SECONDS: '2', OR_WAIT_INTERVAL: '1', OR_LOG_TO_PID1: '0',
++  };
++  const first = await run('sh', [startup], env);
++  assert.equal(first.code, 0, first.stderr);
++  assert.equal(connections.length, 4);
++  assert.equal(Object.keys(aliases).length, 5);
++  assert.deepEqual(events.filter(e => e.startsWith('oauth:')), ['oauth:codex', 'oauth:agy']);
++  const second = await run('sh', [startup], {
++    ...env,
++    OR_CODEX_NAME: 'another configured name',
++    OR_AGY_NAME: 'another configured name',
++    OR_CODEX_AUTH_FILE: '/nonexistent/codex.json',
++    OR_AGY_AUTH_FILE: '/nonexistent/agy.json',
++  });
++  assert.equal(second.code, 0, second.stderr);
++  assert.equal(connections.length, 4);
++  assert.equal(events.filter(e => e.startsWith('oauth:')).length, 2);
++  assert.equal(events.filter(e => e.startsWith('create:')).length, 2);
++  assert.equal(events.filter(e => e.startsWith('update:')).length, 2);
++  assert.equal(events.filter(e => e.startsWith('alias:')).length, 5);
++  for (const secret of ['operator-secret', 'startup-bearer', 'zai-private', 'zen-private', 'codex-private', 'agy-private']) {
++    assert.equal((first.stdout + first.stderr + second.stdout + second.stderr).includes(secret), false);
++  }
++});
++
++test('missing credentials fail explicitly before creating a provider', async () => {
++  const result = await run('node', [manage, 'upsert-key', 'glm', 'name', 'model', 'MISSING_TEST_CREDENTIAL'], {
++    OR_BASE_URL: 'http://127.0.0.1:1', MISSING_TEST_CREDENTIAL: '',
++  });
++  assert.equal(result.code, 1);
++  assert.match(result.stderr, /MISSING_TEST_CREDENTIAL is unset/);
++});
++
++test('cross-origin OAuth import endpoints are refused before credentials are read', async t => {
++  const api = createServer((req, res) => {
++    res.writeHead(200, { 'content-type': 'application/json' });
++    res.end(JSON.stringify({ connections: [] }));
++  });
++  await new Promise((ok, fail) => api.once('error', fail).listen(0, '127.0.0.1', ok));
++  t.after(() => api.close());
++  const result = await run('node', [manage, 'import-oauth', 'agy', 'test', '/nonexistent', '//external.example/api'], {
++    OR_BASE_URL: `http://127.0.0.1:${api.address().port}`, OMNIROUTE_API_KEY: 'secret',
++  });
++  assert.equal(result.code, 1);
++  assert.match(result.stderr, /Only local API paths/);
++  assert.doesNotMatch(result.stderr, /secret/);
++});
+
