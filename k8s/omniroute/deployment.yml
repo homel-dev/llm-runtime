@@ -99,10 +99,17 @@ spec:
             - name: agy-auth
               mountPath: /agy-auth
               readOnly: true
-          lifecycle:
-            postStart:
-              exec:
-                command: [sh, /etc/omniroute-startup/startup.sh]
+          # The upstream ENTRYPOINT remains intact; only its default CMD changes.
+          # Configuration errors are visible in stdout but never restart the server.
+          args:
+            - /bin/sh
+            - -c
+            - |
+              (
+                /bin/sh /etc/omniroute-startup/startup.sh ||
+                  printf '%s\n' 'omniroute-config: setup failed; server remains running' >&2
+              ) &
+              exec node dev/run-standalone.mjs
           startupProbe:
             httpGet:
               path: /healthz

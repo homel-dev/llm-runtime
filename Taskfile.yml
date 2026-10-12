@@ -229,6 +229,11 @@ tasks:
       - kubectl -n llm-runtime rollout status deployment/omniroute-redis --timeout=120s
       - kubectl -n llm-runtime rollout status deployment/omniroute --timeout=300s
 
+  omniroute:reset:
+    desc: Erase only OmniRoute data PVC and restart with a clean database
+    cmds:
+      - ./scripts/omniroute-reset.sh --yes
+
   omniroute:delete:
     desc: Delete OmniRoute workloads while preserving its PVC and Secrets
     cmds:
