@@ -18,5 +18,5 @@ generatorOptions:
   disableNameSuffixHash: false
 images:
   - name: omniroute
-    newName: ghcr.io/homel-dev/llm-runtime-omniroute
-    newTag: main
+    newName: docker.io/diegosouzapw/omniroute
+    newTag: next

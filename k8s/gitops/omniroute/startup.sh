@@ -1,12 +1,20 @@
 #!/bin/sh
-# Native OmniRoute startup configuration. Set overrides in deployment.yml.
-# This script runs in the server container's postStart hook, NOT in another proxy.
+# OmniRoute startup configuration through the built-in management REST API.
+# Override inputs with env vars; runs in the server container postStart hook.
 set -eu
 
+# postStart hook output is not automatically part of the container log stream.
+# Redirect to the OmniRoute process streams only inside its Pod.
+if [ "${OR_LOG_TO_PID1:-0}" = 1 ]; then
+  exec >/proc/1/fd/1 2>/proc/1/fd/2
+fi
+
 : "${OR_BASE_URL:=http://127.0.0.1:20128}"
-: "${OR_CLI:=/app/bin/omniroute.mjs}"
 : "${OR_WAIT_SECONDS:=240}"
 : "${OR_WAIT_INTERVAL:=3}"
+: "${OR_MANAGE_SCRIPT:=/etc/omniroute-startup/manage.mjs}"
+: "${OR_REQUEST_TIMEOUT_MS:=15000}"
+export OR_REQUEST_TIMEOUT_MS
 
 # Native provider IDs, connection names and models.
 : "${OR_CODEX_PROVIDER:=codex}"
@@ -41,8 +49,7 @@ set -eu
 : "${OR_GLM_FLASH_ALIAS:=glm-5.3-flash}"
 : "${OR_GLM_FLASH_TARGET:=glm/glm-5.3-flash}"
 
-helper() { node /etc/omniroute-startup/manage.mjs "$@"; }
-cli() { node "$OR_CLI" --base-url "$OR_BASE_URL" "$@"; }
+helper() { node "$OR_MANAGE_SCRIPT" "$@"; }
 
 printf '%s\n' 'omniroute-config: waiting for local management API'
 helper wait "$OR_WAIT_SECONDS" "$OR_WAIT_INTERVAL"
@@ -52,35 +59,8 @@ OMNIROUTE_API_KEY="$(helper token)"
 export OMNIROUTE_API_KEY
 [ -n "$OMNIROUTE_API_KEY" ] || { echo 'omniroute-config: no management token' >&2; exit 1; }
 
-require_key() {
-  key_name="$1"
-  node -e '
-    const name = process.argv[1];
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(name) || !process.env[name]) {
-      console.error(`omniroute-config: required ${name} is missing`);
-      process.exit(1);
-    }
-  ' "$key_name"
-}
-
 upsert_key_provider() {
-  provider="$1"; name="$2"; model="$3"; key_env="$4"
-  require_key "$key_env"
-  existing_id="$(helper find "$provider" "$name")"
-  if [ -n "$existing_id" ]; then
-    if [ -n "$model" ]; then
-      cli providers edit "$existing_id" --default-model "$model" --credential-env "$key_env"
-    else
-      cli providers edit "$existing_id" --credential-env "$key_env"
-    fi
-  else
-    if [ -n "$model" ]; then
-      cli providers add "$provider" --name "$name" --default-model "$model" --credential-env "$key_env" --yes
-    else
-      cli providers add "$provider" --name "$name" --credential-env "$key_env" --yes
-    fi
-  fi
-  printf 'omniroute-config: API key provider %s configured\n' "$provider"
+  helper upsert-key "$1" "$2" "$3" "$4"
 }
 
 # Import existing OAuth sessions once. Do not replace refreshed token families

@@ -30,8 +30,6 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
-      imagePullSecrets:
-        - name: ghcr-pull-secret
       containers:
         - name: omniroute
           image: omniroute:dev
@@ -58,8 +56,8 @@ spec:
             # All startup configuration inputs; defaults and explanations live
             # at the top of k8s/gitops/omniroute/startup.sh.
             - { name: OR_BASE_URL, value: "http://127.0.0.1:20128" }
-            - { name: OR_CLI, value: /app/bin/omniroute.mjs }
             - { name: OR_WAIT_SECONDS, value: "240" }
+            - { name: OR_LOG_TO_PID1, value: "1" }
             - name: OR_MANAGEMENT_TOKEN
               valueFrom:
                 secretKeyRef: { name: omniroute-operator-token, key: token, optional: true }
