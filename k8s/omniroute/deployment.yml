@@ -30,6 +30,8 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: omniroute
           image: omniroute:dev
@@ -53,6 +55,20 @@ spec:
             - { name: LIVE_WS_HOST, value: "127.0.0.1" }
             - { name: LIVE_WS_ALLOWED_ORIGINS, value: "http://localhost:20128,http://127.0.0.1:20128" }
             - { name: STORAGE_ENCRYPTION_KEY_VERSION, value: v1 }
+            # All startup configuration inputs; defaults and explanations live
+            # at the top of k8s/gitops/omniroute/startup.sh.
+            - { name: OR_BASE_URL, value: "http://127.0.0.1:20128" }
+            - { name: OR_CLI, value: /app/bin/omniroute.mjs }
+            - { name: OR_WAIT_SECONDS, value: "240" }
+            - name: OR_MANAGEMENT_TOKEN
+              valueFrom:
+                secretKeyRef: { name: omniroute-operator-token, key: token, optional: true }
+            - name: ZAI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: rr-zai-coding, key: api-key }
+            - name: OPENCODE_API_KEY
+              valueFrom:
+                secretKeyRef: { name: rr-opencode-zen, key: api-key }
             - name: INITIAL_PASSWORD
               valueFrom:
                 secretKeyRef: { name: omniroute-runtime, key: initial-password }
@@ -76,6 +92,19 @@ spec:
               mountPath: /app/data
             - name: tmp
               mountPath: /tmp
+            - name: startup-script
+              mountPath: /etc/omniroute-startup
+              readOnly: true
+            - name: codex-auth
+              mountPath: /codex-auth
+              readOnly: true
+            - name: agy-auth
+              mountPath: /agy-auth
+              readOnly: true
+          lifecycle:
+            postStart:
+              exec:
+                command: [sh, /etc/omniroute-startup/startup.sh]
           startupProbe:
             httpGet:
               path: /healthz
@@ -112,6 +141,17 @@ spec:
             claimName: omniroute-data
         - name: tmp
           emptyDir: {}
+        - name: startup-script
+          configMap:
+            name: omniroute-startup-script
+        - name: codex-auth
+          persistentVolumeClaim:
+            claimName: rr-openai-subscription-auth
+            readOnly: true
+        - name: agy-auth
+          persistentVolumeClaim:
+            claimName: rr-gemini-subscription-auth
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service

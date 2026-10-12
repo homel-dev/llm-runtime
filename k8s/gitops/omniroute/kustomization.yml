@@ -6,11 +6,17 @@ resources:
   - bootstrap.yml
 configMapGenerator:
   - name: omniroute-bootstrap-script
+    options:
+      disableNameSuffixHash: true
     files:
       - bootstrap.py
+  - name: omniroute-startup-script
+    files:
+      - startup.sh
+      - manage.mjs
 generatorOptions:
-  disableNameSuffixHash: true
+  disableNameSuffixHash: false
 images:
   - name: omniroute
-    newName: docker.io/diegosouzapw/omniroute
-    newTag: next
+    newName: ghcr.io/homel-dev/llm-runtime-omniroute
+    newTag: main
