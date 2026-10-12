@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: llm-runtime
+resources:
+  - controllers.yml
+  - session-bootstrap.yml
+configMapGenerator:
+  - name: mcp-session-bootstrap-script
+    files:
+      - session-bootstrap.py
+generatorOptions:
+  disableNameSuffixHash: true

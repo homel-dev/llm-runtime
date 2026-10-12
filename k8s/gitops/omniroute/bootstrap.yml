@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: omniroute-secret-bootstrap
+  namespace: llm-runtime
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: omniroute-secret-bootstrap
+  namespace: llm-runtime
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [omniroute-runtime]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omniroute-secret-bootstrap
+  namespace: llm-runtime
+subjects:
+  - kind: ServiceAccount
+    name: omniroute-secret-bootstrap
+    namespace: llm-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: omniroute-secret-bootstrap
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: omniroute-secret-bootstrap
+  namespace: llm-runtime
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: omniroute-secret-bootstrap
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: docker.io/library/python:3.12.12-alpine3.22
+          imagePullPolicy: IfNotPresent
+          command: [python, /bootstrap/bootstrap.py]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          volumeMounts:
+            - name: script
+              mountPath: /bootstrap
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: { cpu: "10m", memory: "32Mi" }
+            limits: { cpu: "100m", memory: "128Mi" }
+      volumes:
+        - name: script
+          configMap:
+            name: omniroute-bootstrap-script
+        - name: data
+          persistentVolumeClaim:
+            claimName: omniroute-data

@@ -90,15 +90,15 @@ const small = await upsertConnection({
 const large = await upsertConnection({
   provider: "vllm",
   name: "llm-runtime local large",
-  defaultModel: "Qwen2.5-72B-Instruct-AWQ",
+  defaultModel: "Qwen3-32B-AWQ",
   providerSpecificData: {
     baseUrl: "http://llm-large.llm-runtime.svc.cluster.local:8000/v1",
   },
 });
 
-const managed = [glm, small, large].filter((connection) => connection?.id);
-if (managed.length !== 3) {
-  throw new Error(`Expected 3 managed provider connections, got ${managed.length}`);
+const managed = [glm, large].filter((connection) => connection?.id);
+if (managed.length !== 2) {
+  throw new Error(`Expected 2 managed provider connections, got ${managed.length}`);
 }
 
 const selected = await api("/api/providers/test-batch", {
@@ -112,7 +112,7 @@ if (selected?.summary?.failed > 0 || selected?.summary?.passed !== managed.lengt
   throw new Error(`Native provider validation failed: ${JSON.stringify(selected)}`);
 }
 
-for (const connection of [small, large]) {
+for (const connection of [large]) {
   await api(`/api/providers/${encodeURIComponent(connection.id)}/sync-models?mode=import`, {
     method: "POST",
   });
@@ -125,7 +125,7 @@ const aliases = {
   "glm-5.3": "glm/glm-5.3",
   "glm-5.3-flash": "glm/glm-5.3-flash",
 //  "llm-small": "llama-cpp/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
-//  "llm-large": "vllm/Qwen2.5-72B-Instruct-AWQ",
+  "llm-large": "vllm/Qwen3-32B-AWQ",
 };
 
 for (const [from, to] of Object.entries(aliases)) {
@@ -141,7 +141,7 @@ const oauth = {
 const result = {
   configured: {
     glm: glm.id,
-    small: small.id,
+    //small: small.id,
     large: large.id,
     aliases,
   },

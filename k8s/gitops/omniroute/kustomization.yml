@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: llm-runtime
+resources:
+  - ../../omniroute
+  - bootstrap.yml
+configMapGenerator:
+  - name: omniroute-bootstrap-script
+    files:
+      - bootstrap.py
+generatorOptions:
+  disableNameSuffixHash: true
+images:
+  - name: omniroute
+    newName: docker.io/diegosouzapw/omniroute
+    newTag: next

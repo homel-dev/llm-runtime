@@ -36,6 +36,7 @@ tasks:
       # k8s/kustomization.yml injects part-of=llm-runtime into selectors.
       # Re-apply the policy raw so telemetry selectors keep their authored shape.
       - kubectl apply -f k8s/networkpolicy.yml
+      - task obs:deploy
 
   down:
     desc: Delete LLM runtime resources
@@ -61,7 +62,7 @@ tasks:
     desc: Restart a local runtime tier (TIER=small|large)
     requires:
       vars:
-        - name: TIER
+        - name: tier
           enum: [small, large]
     cmds:
       - kubectl -n llm-runtime rollout restart deploy/llm-{{.TIER}}
@@ -99,14 +100,14 @@ tasks:
     cmds:
       - ./scripts/kube-runtime-metrics.sh {{.TIER}}
 
-  llm:benchmark:
+  llm:start:
     desc: Run the sequential gateway benchmark for a local runtime tier (TIER=small|large)
     requires:
       vars:
-        - name: TIER
+        - name: tier
           enum: [small, large]
     cmds:
-      - ./hack/kube-benchmark.sh {{.TIER}}
+      - kubectl apply -f k8s/large/deployment.yml
 
   llm:diagnose-startup-large:
     desc: Diagnose llm-large vLLM startup state

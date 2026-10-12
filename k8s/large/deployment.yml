@@ -1,4 +1,3 @@
-# k8s/large/deployment.yml
 apiVersion: apps/v1
 kind: Deployment
 
@@ -13,8 +12,7 @@ metadata:
 
 spec:
   replicas: 1
-  # Singleton GPU workload consumes three GPUs; a surge rollout cannot schedule
-  # beside the current Pod. Delete the old Pod before creating the new one.
+
   strategy:
     type: Recreate
 
@@ -37,36 +35,30 @@ spec:
           imagePullPolicy: IfNotPresent
 
           args:
-            - Qwen/Qwen2.5-72B-Instruct-AWQ
+            - Qwen/Qwen3-32B-AWQ
+
             - --host
             - "0.0.0.0"
+
             - --port
             - "8000"
+
             - --served-model-name
-            - Qwen2.5-72B-Instruct-AWQ
+            - Qwen3-32B-AWQ
+
             - --quantization
             - awq
-            - --dtype
-            - float16
+
             - --tensor-parallel-size
-            - "1"
-            - --pipeline-parallel-size
-            - "3"
-            - --hf-overrides
-            - '{"rope_parameters":{"factor":2.0,"original_max_position_embeddings":32768,"rope_theta":1000000,"rope_type":"yarn"}}'
-            - --max-model-len
-            - "65536"
+            - "2"
+
             - --gpu-memory-utilization
             - "0.92"
-            - --max-num-seqs
-            - "4"
+
+            - --pipeline-parallel-size
+            - "1"
+            - --disable-custom-all-reduce
             - --enforce-eager
-            - --no-async-scheduling
-            - --enable-auto-tool-choice
-            - --tool-call-parser
-            - hermes
-            - --structured-outputs-config.backend
-            - xgrammar
 
           env:
             - name: HF_HOME
@@ -88,6 +80,18 @@ spec:
 
             - name: NVIDIA_DRIVER_CAPABILITIES
               value: compute,utility
+
+            # Pin CUDA/vLLM to the two known-good physical RTX 3090s.
+            #
+            # 01:00.0 = GPU-06c039b0-1d69-52eb-2475-45c1dad81aea
+            # 81:00.0 = GPU-0de7cad3-de92-f02d-31b1-c0400359ef20
+            #
+            # Explicitly excludes:
+            # 82:00.0 = GPU-0483e19d-6321-b657-1ed6-b262f2789541
+            - name: CUDA_VISIBLE_DEVICES
+              value: "GPU-06c039b0-1d69-52eb-2475-45c1dad81aea,GPU-0de7cad3-de92-f02d-31b1-c0400359ef20"
+            - name: CUDA_DEVICE_ORDER
+              value: PCI_BUS_ID
 
             - name: PYTORCH_CUDA_ALLOC_CONF
               value: expandable_segments:True
@@ -114,12 +118,17 @@ spec:
 
           resources:
             requests:
-              cpu: "8"
-              memory: 48Gi
+              cpu: "2"
+              memory: 16Gi
+
+              # Deliberately reserve all three physical GPUs.
+              # The CUDA process itself is restricted to the two
+              # known-good UUIDs above.
               nvidia.com/gpu: "3"
+
             limits:
-              cpu: "16"
-              memory: 96Gi
+              cpu: "4"
+              memory: 32Gi
               nvidia.com/gpu: "3"
 
       volumes:
@@ -131,3 +140,4 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 32Gi
+

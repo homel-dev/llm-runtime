@@ -10,17 +10,18 @@ resources:
   - runtime-contract.yml
  # - networkpolicy.yml
 
-  - small/pvc.yml
-  - small/deployment.yml
-  - small/service.yml
+  # Local inference is not part of the default desired state.
+  # - small/pvc.yml
+  # - small/deployment.yml
+  # - small/service.yml
 
 #  - medium/pvc.yml
 #  - medium/deployment.yml
 #  - medium/service.yml
 
-  - large/pvc.yml
-  - large/deployment.yml
-  - large/service.yml
+  # - large/pvc.yml
+  # - large/deployment.yml
+  # - large/service.yml
 
 labels:
   - includeSelectors: true

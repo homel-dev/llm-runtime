@@ -160,3 +160,4 @@ spec:
           - '^memory\.retrieve_context$'
           - '^memory\.reference\.search$'
           - '^memory\.reference\.get$'
+          - '^memory\.submit_agent_outcome$'

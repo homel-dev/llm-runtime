@@ -1,0 +1,139 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: envoy-gateway-chart
+  namespace: llm-runtime
+spec:
+  interval: 1h
+  url: oci://docker.io/envoyproxy/gateway-helm
+  ref:
+    tag: v1.8.1
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: envoy-ai-gateway-crds-chart
+  namespace: llm-runtime
+spec:
+  interval: 1h
+  url: oci://docker.io/envoyproxy/ai-gateway-crds-helm
+  ref:
+    tag: v1.1.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: envoy-ai-gateway-chart
+  namespace: llm-runtime
+spec:
+  interval: 1h
+  url: oci://docker.io/envoyproxy/ai-gateway-helm
+  ref:
+    tag: v1.1.0
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: eg
+  namespace: llm-runtime
+spec:
+  interval: 5m
+  timeout: 10m
+  releaseName: eg
+  targetNamespace: llm-runtime
+  chartRef:
+    kind: OCIRepository
+    name: envoy-gateway-chart
+  install:
+    crds: Create
+  upgrade:
+    crds: Skip
+  values:
+    config:
+      envoyGateway:
+        gateway:
+          controllerName: gateway.envoyproxy.io/gatewayclass-controller
+        logging:
+          level:
+            default: info
+        provider:
+          type: Kubernetes
+        extensionApis:
+          enableEnvoyPatchPolicy: true
+          enableBackend: true
+        extensionManager:
+          hooks:
+            xdsTranslator:
+              translation:
+                listener:
+                  includeAll: true
+                route:
+                  includeAll: true
+                cluster:
+                  includeAll: true
+                secret:
+                  includeAll: true
+              post:
+                - Translation
+                - Cluster
+                - Route
+          service:
+            fqdn:
+              hostname: ai-gateway-controller.llm-runtime.svc.cluster.local
+              port: 1063
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: aieg-crd
+  namespace: llm-runtime
+spec:
+  interval: 5m
+  timeout: 10m
+  releaseName: aieg-crd
+  targetNamespace: llm-runtime
+  chartRef:
+    kind: OCIRepository
+    name: envoy-ai-gateway-crds-chart
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: aieg
+  namespace: llm-runtime
+spec:
+  interval: 5m
+  timeout: 10m
+  releaseName: aieg
+  targetNamespace: llm-runtime
+  dependsOn:
+    - name: eg
+    - name: aieg-crd
+  chartRef:
+    kind: OCIRepository
+    name: envoy-ai-gateway-chart
+  valuesFrom:
+    - kind: Secret
+      name: llm-runtime-mcp-session
+      valuesKey: seed
+      targetPath: controller.mcp.sessionEncryption.seed
+      literal: true
+  values:
+    envoyGateway:
+      namespace: llm-runtime
+    controller:
+      requestHeaderAttributes: "x-project-id:project.id,x-run-id:run.id,x-objective-id:objective.id,x-agent-role:agent.role"
+      metricsRequestHeaderAttributes: "x-project-id:project.id"
+    extProc:
+      extraEnvVars:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://alloy.llm-runtime.svc.cluster.local:4318
