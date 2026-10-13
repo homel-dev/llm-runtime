@@ -9,6 +9,9 @@ resources:
   - deployment.yml
   - openai-gateway-service.yml
   - networkpolicy.yml
+  - grafana/configmap-datasource.yml
+  - grafana/configmap-dashboard.yml
+  - grafana/rbac.yml
 
 patches:
   - target:

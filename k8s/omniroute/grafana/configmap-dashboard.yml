@@ -1,0 +1,326 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omniroute-grafana-dashboard
+  namespace: llm-runtime
+  labels:
+    grafana_dashboard: '1'
+    app.kubernetes.io/part-of: llm-runtime
+data:
+  llm-runtime-omniroute-providers.json: |
+    {
+      "uid": "llm-runtime-omniroute-providers",
+      "title": "LLM Runtime / OmniRoute Providers & Models",
+      "description": "Compact live provider health and model catalog. Configuration owned by llm-runtime, visualized in OCO Grafana.",
+      "schemaVersion": 39,
+      "version": 1,
+      "id": null,
+      "tags": [
+        "llm-runtime",
+        "omniroute",
+        "providers"
+      ],
+      "timezone": "browser",
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "editable": false,
+      "graphTooltip": 1,
+      "annotations": {
+        "list": []
+      },
+      "links": [],
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "OmniRoute HTTP",
+          "description": "Service liveness, not provider inference health. Probe from llm-runtime Alloy to OmniRoute compatibility Service.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "max(probe_success{project=\"llm-runtime\",job=\"omniroute-blackbox\"})",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "noValue": "NO DATA",
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {
+                      "text": "DOWN",
+                      "color": "red"
+                    },
+                    "1": {
+                      "text": "UP",
+                      "color": "green"
+                    }
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 2,
+          "type": "table",
+          "title": "Provider health",
+          "description": "OmniRoute provider health matrix. Health is derived from request outcomes, cooldowns, lockouts and account state; idle providers are not independently verified by this view.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 18,
+            "h": 10
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/providers/health-matrix?range=24h",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "backend",
+              "root_selector": "$.providers",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "state",
+                  "text": "Health",
+                  "type": "string"
+                },
+                {
+                  "selector": "connections.active",
+                  "text": "Active accounts",
+                  "type": "number"
+                },
+                {
+                  "selector": "connections.total",
+                  "text": "Accounts",
+                  "type": "number"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests / 24h",
+                  "type": "number"
+                },
+                {
+                  "selector": "successRate",
+                  "text": "Success rate",
+                  "type": "number"
+                },
+                {
+                  "selector": "lastErrorAt",
+                  "text": "Last error",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Health"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "healthy": {
+                            "text": "UP",
+                            "color": "green"
+                          },
+                          "degraded": {
+                            "text": "DEGRADED",
+                            "color": "yellow"
+                          },
+                          "down": {
+                            "text": "DOWN",
+                            "color": "red"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            },
+            "sortBy": [
+              {
+                "displayName": "Provider",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": 3,
+          "type": "text",
+          "title": "Reading the status",
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 6,
+            "h": 6
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**HTTP UP** means the router responds to its `/healthz` probe.\n\n**Provider health** is based on OmniRoute observations and does not guarantee every model can run.\n\n**Catalogued model** means advertised/selectable, not a successful inference.\n\nData sources: OCO VictoriaMetrics and OmniRoute read-only HTTP API."
+          }
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "Available model catalog",
+          "description": "Models advertised by OmniRoute /api/models/catalog (not verified with paid inference). Includes model IDs to copy into clients.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 10,
+            "w": 24,
+            "h": 15
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".catalog | to_entries | [ .[] | .key as $provider | .value.models[] | {provider:$provider, id:.id, name:.name, type:.type} ]",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "id",
+                  "text": "Model ID",
+                  "type": "string"
+                },
+                {
+                  "selector": "name",
+                  "text": "Display name",
+                  "type": "string"
+                },
+                {
+                  "selector": "type",
+                  "text": "Type",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            },
+            "sortBy": [
+              {
+                "displayName": "Provider",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ]
+    }

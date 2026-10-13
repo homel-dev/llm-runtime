@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omniroute-grafana-datasource
+  namespace: llm-runtime
+  labels:
+    grafana_datasource: '1'
+    app.kubernetes.io/part-of: llm-runtime
+data:
+  omniroute-infinity.yml: |
+    apiVersion: 1
+    datasources:
+      - name: OmniRoute API
+        uid: omniroute-api
+        type: yesoreyeram-infinity-datasource
+        access: proxy
+        isDefault: false
+        editable: false
+        jsonData:
+          auth_method: bearerToken
+          allowedHosts:
+            - http://omniroute.llm-runtime.svc.cluster.local:20128
+          timeoutInSeconds: 20
+        secureJsonData:
+          bearerToken: $OMNIROUTE_GRAFANA_READ_TOKEN
