@@ -25,4 +25,6 @@ kubectl -n llm-runtime exec deployment/omniroute -c omniroute -- \
   --from-file=token=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
 
 printf '%s\n' 'Read-only Grafana token Secret reconciled in observability-console.'
-printf '%s\n' 'Restart OCO Grafana after applying the OCO deployment patch to read the token env.'
+kubectl -n observability-console rollout restart deployment/grafana
+kubectl -n observability-console rollout status deployment/grafana --timeout=300s
+printf '%s\n' 'OCO Grafana restarted with the read-only OmniRoute token.'
