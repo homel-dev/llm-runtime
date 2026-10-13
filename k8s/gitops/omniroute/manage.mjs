@@ -27,8 +27,20 @@ async function api(method, endpoint, body, token = process.env.OMNIROUTE_API_KEY
     method, headers, body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(requestTimeout),
   });
-  // Never print server error bodies; OAuth imports may include credential data.
-  if (!response.ok) throw new Error(`${method} ${endpoint}: HTTP ${response.status}`);
+  // Never print server error bodies; OAuth imports may contain credentials.
+  // Error codes are safe to show and distinguish identity_unverified from duplicate_account.
+  if (!response.ok) {
+    let reason = '';
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      try {
+        const details = await response.json();
+        if (typeof details.code === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(details.code)) {
+          reason = ` (${details.code})`;
+        }
+      } catch { /* malformed or non-JSON response */ }
+    }
+    throw new Error(`${method} ${endpoint}: HTTP ${response.status}${reason}`);
+  }
   return response.json();
 }
 
@@ -113,8 +125,13 @@ async function main() {
       if (!credentials || typeof credentials !== 'object' || Array.isArray(credentials)) {
         throw new Error(`Invalid OAuth file for ${provider}`);
       }
+      // OmniRoute agy import requires overwriteExisting=true if Google userinfo
+      // cannot verify the email (HTTP 409 identity_unverified). This path is
+      // reached only when no agy connection exists, so no stored OAuth session
+      // is replaced. Codex keeps its non-overwriting import behavior.
       const result = await api('POST', endpoint, {
-        source: { kind: 'json', json: credentials }, name, overwriteExisting: false,
+        source: { kind: 'json', json: credentials },
+        name, overwriteExisting: provider === 'agy',
       });
       if (result.connection?.provider !== provider) throw new Error(`Unexpected OAuth import response: ${provider}`);
       console.log(`omniroute-config: ${provider} OAuth session imported`);

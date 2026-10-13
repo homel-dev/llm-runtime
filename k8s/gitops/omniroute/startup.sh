@@ -1,6 +1,6 @@
 #!/bin/sh
 # OmniRoute startup configuration through the built-in management REST API.
-# Override inputs with env vars; runs in the server container postStart hook.
+# Override inputs with env vars; runs alongside the server, not in postStart.
 set -eu
 
 # postStart hook output is not automatically part of the container log stream.
@@ -63,17 +63,34 @@ upsert_key_provider() {
   helper upsert-key "$1" "$2" "$3" "$4"
 }
 
-# Import existing OAuth sessions once. Do not replace refreshed token families
-# from the OmniRoute database on every Pod restart.
-helper import-oauth "$OR_CODEX_PROVIDER" "$OR_CODEX_NAME" "$OR_CODEX_AUTH_FILE" "$OR_CODEX_IMPORT_ENDPOINT"
-helper import-oauth "$OR_AGY_PROVIDER" "$OR_AGY_NAME" "$OR_AGY_AUTH_FILE" "$OR_AGY_IMPORT_ENDPOINT"
-upsert_key_provider "$OR_GLM_PROVIDER" "$OR_GLM_NAME" "$OR_GLM_MODEL" "$OR_GLM_KEY_ENV"
-upsert_key_provider "$OR_OPENCODE_PROVIDER" "$OR_OPENCODE_NAME" "$OR_OPENCODE_MODEL" "$OR_OPENCODE_KEY_ENV"
+# A failed provider must not prevent the remaining providers and aliases from
+# being configured. Keep an explicit failed exit status and per-step diagnostics.
+failed=0
+step() {
+  label="$1"; shift
+  if "$@"; then
+    printf 'omniroute-config: OK %s\n' "$label"
+  else
+    code=$?
+    failed=$((failed + 1))
+    printf 'omniroute-config: FAILED %s (exit=%s)\n' "$label" "$code" >&2
+  fi
+}
 
-helper alias "$OR_CODEX_ALIAS" "$OR_CODEX_TARGET"
-helper alias "$OR_GEMINI_PRO_ALIAS" "$OR_GEMINI_PRO_TARGET"
-helper alias "$OR_GEMINI_AUTO_ALIAS" "$OR_GEMINI_AUTO_TARGET"
-helper alias "$OR_GLM_ALIAS" "$OR_GLM_TARGET"
-helper alias "$OR_GLM_FLASH_ALIAS" "$OR_GLM_FLASH_TARGET"
+# Import OAuth credentials only when the provider has no existing connection.
+step codex-oauth helper import-oauth "$OR_CODEX_PROVIDER" "$OR_CODEX_NAME" "$OR_CODEX_AUTH_FILE" "$OR_CODEX_IMPORT_ENDPOINT"
+step agy-oauth helper import-oauth "$OR_AGY_PROVIDER" "$OR_AGY_NAME" "$OR_AGY_AUTH_FILE" "$OR_AGY_IMPORT_ENDPOINT"
+step glm upsert_key_provider "$OR_GLM_PROVIDER" "$OR_GLM_NAME" "$OR_GLM_MODEL" "$OR_GLM_KEY_ENV"
+step opencode-zen upsert_key_provider "$OR_OPENCODE_PROVIDER" "$OR_OPENCODE_NAME" "$OR_OPENCODE_MODEL" "$OR_OPENCODE_KEY_ENV"
 
-printf '%s\n' 'omniroute-config: four native providers configured'
+step alias-codex helper alias "$OR_CODEX_ALIAS" "$OR_CODEX_TARGET"
+step alias-gemini-pro helper alias "$OR_GEMINI_PRO_ALIAS" "$OR_GEMINI_PRO_TARGET"
+step alias-gemini-auto helper alias "$OR_GEMINI_AUTO_ALIAS" "$OR_GEMINI_AUTO_TARGET"
+step alias-glm helper alias "$OR_GLM_ALIAS" "$OR_GLM_TARGET"
+step alias-glm-flash helper alias "$OR_GLM_FLASH_ALIAS" "$OR_GLM_FLASH_TARGET"
+
+if [ "$failed" -ne 0 ]; then
+  printf 'omniroute-config: FAILED %s step(s); see preceding errors\n' "$failed" >&2
+  exit 1
+fi
+printf '%s\n' 'omniroute-config: configured all four native providers and five aliases'
