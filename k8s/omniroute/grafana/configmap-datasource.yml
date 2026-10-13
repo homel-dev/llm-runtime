@@ -16,6 +16,7 @@ data:
         access: proxy
         isDefault: false
         editable: false
+        version: 2
         jsonData:
           auth_method: bearerToken
           allowedHosts:
