@@ -19,6 +19,15 @@ spec:
       ports:
         - { protocol: TCP, port: 20128 }
     - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kex
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kex-toolbox
+      ports:
+        - { protocol: TCP, port: 20128 }
+    - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: alloy
