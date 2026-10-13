@@ -140,10 +140,35 @@ async function main() {
     case 'alias': {
       const [from, to] = args;
       if (!from || !to) return;
-      const current = await api('GET', '/api/settings/model-aliases');
-      if (current.custom?.[from] === to) return;
-      await api('POST', '/api/settings/model-aliases', { from, to });
-      console.log(`omniroute-config: alias ${from} -> ${to}`);
+      // Routing aliases belong to the modelAliases DB namespace, not the
+      // Settings deprecation aliases. The latter rewrite the *upstream* model
+      // as "codex/gpt-5.6-sol" or "glm/glm-5.3", which both vendors reject.
+      const legacy = await api('GET', '/api/settings/model-aliases');
+      const oldTarget = legacy.custom?.[from];
+      if (oldTarget !== undefined && oldTarget !== to) {
+        throw new Error(`Refusing to replace unrelated Settings alias ${from}`);
+      }
+      const routing = await api('GET', '/api/models/alias');
+      if (routing.aliases?.[from] !== to) {
+        await api('PUT', '/api/models/alias', { alias: from, model: to });
+      }
+      // Clean only the obsolete entry created by the previous startup version.
+      // Do this AFTER the routing alias was persisted, to avoid a gap.
+      if (oldTarget === to) {
+        await api('DELETE', '/api/settings/model-aliases', { from });
+      }
+      console.log(`omniroute-config: routing alias ${from} -> ${to}`);
+      return;
+    }
+    case 'verify-provider': {
+      const [provider] = args;
+      if (!provider) throw new Error('verify-provider requires a provider ID');
+      const connections = (await list()).filter(c => c.provider === provider);
+      if (!connections.length) throw new Error(`No registered connection for ${provider}`);
+      if (!connections.some(c => c.isActive === true)) {
+        throw new Error(`No active connection for ${provider}`);
+      }
+      console.log(`omniroute-config: active ${provider} (${connections.length} connection(s))`);
       return;
     }
     default:

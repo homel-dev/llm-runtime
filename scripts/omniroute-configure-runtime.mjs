@@ -65,10 +65,26 @@ async function upsertConnection({ provider, name, apiKey, defaultModel, provider
 }
 
 async function setAlias(from, to) {
-  await api("/api/settings/model-aliases", {
-    method: "POST",
-    body: { from, to },
-  });
+  // The Settings alias endpoint performs deprecation rewrites inside the
+  // provider executor. Use the model routing endpoint instead.
+  const legacy = await api("/api/settings/model-aliases");
+  const oldTarget = legacy.custom?.[from];
+  if (oldTarget !== undefined && oldTarget !== to) {
+    throw new Error(`Refusing to replace unrelated Settings alias ${from}`);
+  }
+  const routing = await api("/api/models/alias");
+  if (routing.aliases?.[from] !== to) {
+    await api("/api/models/alias", {
+      method: "PUT",
+      body: { alias: from, model: to },
+    });
+  }
+  if (oldTarget === to) {
+    await api("/api/settings/model-aliases", {
+      method: "DELETE",
+      body: { from },
+    });
+  }
 }
 
 const glm = await upsertConnection({
