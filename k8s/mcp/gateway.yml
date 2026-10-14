@@ -155,9 +155,36 @@ spec:
       kind: Backend
       group: gateway.envoyproxy.io
       path: /mcp
+      forwardHeaders:
+        - name: X-Memory-Capability
       toolSelector:
         includeRegex:
           - '^memory\.retrieve_context$'
           - '^memory\.reference\.search$'
           - '^memory\.reference\.get$'
           - '^memory\.submit_agent_outcome$'
+          - '^codegraph_symbol_search$'
+          - '^codegraph_get_symbol_info$'
+          - '^codegraph_get_detailed_symbol$'
+          - '^codegraph_get_ai_context$'
+          - '^codegraph_get_edit_context$'
+          - '^codegraph_get_curated_context$'
+          - '^codegraph_search_by_pattern$'
+          - '^codegraph_search_by_error$'
+          - '^codegraph_get_callers$'
+          - '^codegraph_get_callees$'
+          - '^codegraph_get_call_graph$'
+          - '^codegraph_get_dependency_graph$'
+          - '^codegraph_analyze_impact$'
+          - '^codegraph_analyze_complexity$'
+          - '^codegraph_traverse_graph$'
+          - '^codegraph_find_circular_deps$'
+          - '^codegraph_find_entry_points$'
+          - '^codegraph_find_hot_paths$'
+          - '^codegraph_find_by_imports$'
+          - '^codegraph_find_by_signature$'
+          - '^codegraph_find_implementors$'
+          - '^codegraph_find_dead_imports$'
+          - '^codegraph_get_module_summary$'
+          - '^codegraph_find_related_tests$'
+          - '^codegraph_pr_context$'
