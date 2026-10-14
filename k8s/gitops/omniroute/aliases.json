@@ -1,17 +1,57 @@
 {
   "version": 1,
-  "aliases": {
-    "coder": "glm/glm-5.3",
-    "planner": "codex/gpt-5.6-sol",
-    "reviewer": "codex/gpt-5.6-sol",
-    "enricher": "agy/gemini-3.8-flash-high",
-    "failure-analyst": "glm/glm-5.3",
-    "materializer": "glm/glm-5.3",
-    "gpt-5.6-sol": "codex/gpt-5.6-sol",
-    "gemini-subscription-pro": "agy/gemini-3.8-flash-high",
-    "gemini-subscription-auto": "agy/gemini-3.8-flash-high",
-    "glm-5.3": "glm/glm-5.3",
-    "glm-5.3-flash": "glm/glm-5.3-flash",
-    "llm-large": "vllm/Qwen3-32B-AWQ"
+  "combos": [
+    {
+      "name": "Coder",
+      "strategy": "priority",
+      "models": [
+        "glm/glm-5.3"
+      ]
+    },
+    {
+      "name": "Planner",
+      "strategy": "priority",
+      "models": [
+        "codex/gpt-5.6-sol"
+      ]
+    },
+    {
+      "name": "Reviewer",
+      "strategy": "priority",
+      "models": [
+        "codex/gpt-5.6-sol"
+      ]
+    },
+    {
+      "name": "Enricher",
+      "strategy": "priority",
+      "models": [
+        "agy/gemini-3.8-flash-high"
+      ]
+    },
+    {
+      "name": "Hodor Weak",
+      "strategy": "priority",
+      "models": []
+    },
+    {
+      "name": "Hodor Strong",
+      "strategy": "priority",
+      "models": []
+    },
+    {
+      "name": "Hodor Front",
+      "strategy": "priority",
+      "models": []
+    }
+  ],
+  "mappings": {
+    "coder": "Coder",
+    "planner": "Planner",
+    "reviewer": "Reviewer",
+    "enricher": "Enricher",
+    "hodor-weak": "Hodor Weak",
+    "hodor-strong": "Hodor Strong",
+    "hodor-front": "Hodor Front"
   }
 }
