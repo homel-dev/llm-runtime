@@ -29,6 +29,12 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: runtime-operator-check
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: eco
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: eco
       ports:
         - protocol: TCP
           port: 8000
