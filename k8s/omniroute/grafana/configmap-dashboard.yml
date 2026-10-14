@@ -11,9 +11,9 @@ data:
     {
       "uid": "llm-runtime-omniroute-providers",
       "title": "LLM Runtime / OmniRoute Routing & Activity",
-      "description": "Live Combo routing, alias mappings, provider and model activity, and recent calls from OmniRoute REST plus OCO liveness.",
+      "description": "OmniRoute live Combo routing, aliases, provider connections, model inventories, account health and request activity. Semantic colors across all tables.",
       "schemaVersion": 39,
-      "version": 2,
+      "version": 3,
       "id": null,
       "tags": [
         "llm-runtime",
@@ -524,7 +524,145 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alias / pattern"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#2DD4BF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo ID"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Enabled"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "ON",
+                            "color": "green"
+                          },
+                          "false": {
+                            "text": "OFF",
+                            "color": "red"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Strategy"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#C4B5FD"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Targets (ordered)"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -613,7 +751,92 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Strategy"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#C4B5FD"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Targets (ordered)"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo ID"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -708,7 +931,153 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failures"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "red",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Success %"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 75
+                        },
+                        {
+                          "color": "green",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg latency ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -716,6 +1085,1266 @@ data:
             "footer": {
               "show": false
             }
+          }
+        },
+        {
+          "id": 19,
+          "type": "table",
+          "title": "Direct model aliases (non-Combo)",
+          "description": "Live /api/models/alias aliases; Combo mappings are shown separately above.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 28,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/alias",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".aliases | to_entries[] | {alias:.key, target:.value}",
+              "columns": [
+                {
+                  "selector": "alias",
+                  "text": "Alias",
+                  "type": "string"
+                },
+                {
+                  "selector": "target",
+                  "text": "Direct target",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alias"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#2DD4BF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Direct target"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 20,
+          "type": "table",
+          "title": "Settings custom aliases",
+          "description": "Live /api/settings/model-aliases custom aliases, independent of Combo mappings.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 28,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/settings/model-aliases",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": "(.custom // {}) | to_entries[] | {alias:.key, target:.value}",
+              "columns": [
+                {
+                  "selector": "alias",
+                  "text": "Alias",
+                  "type": "string"
+                },
+                {
+                  "selector": "target",
+                  "text": "Settings target",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Alias"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#2DD4BF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Settings target"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 22,
+          "type": "table",
+          "title": "Provider connections / accounts (24h)",
+          "description": "Configured providers and connection/account state, as reported by /api/providers/health-matrix?range=24h. No secrets or raw keys. May contain multiple accounts per provider.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 36,
+            "w": 12,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/providers/health-matrix?range=24h",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".providers[] | .provider as $provider | .accounts[]? | {provider:$provider, connection:.label, active:.isActive, state:.state, models:.modelCount, issues:.issueCount, cooldown:.cooldownRemainingMs, test:(.testStatus // \"\"), error:(.lastErrorType // \"\")}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "connection",
+                  "text": "Connection",
+                  "type": "string"
+                },
+                {
+                  "selector": "active",
+                  "text": "Active",
+                  "type": "boolean"
+                },
+                {
+                  "selector": "state",
+                  "text": "Health",
+                  "type": "string"
+                },
+                {
+                  "selector": "models",
+                  "text": "Models",
+                  "type": "number"
+                },
+                {
+                  "selector": "issues",
+                  "text": "Issues",
+                  "type": "number"
+                },
+                {
+                  "selector": "cooldown",
+                  "text": "Cooldown ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "test",
+                  "text": "Test status",
+                  "type": "string"
+                },
+                {
+                  "selector": "error",
+                  "text": "Last error type",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Connection"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FBBF24"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Active"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "YES",
+                            "color": "green"
+                          },
+                          "false": {
+                            "text": "NO",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Health"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "healthy": {
+                            "text": "UP",
+                            "color": "green"
+                          },
+                          "degraded": {
+                            "text": "DEGRADED",
+                            "color": "yellow"
+                          },
+                          "down": {
+                            "text": "DOWN",
+                            "color": "red"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Issues"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "red",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cooldown ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last error type"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FCA5A5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 24,
+          "type": "table",
+          "title": "Providers — advertised model counts",
+          "description": "Live provider buckets from /api/models/catalog. Includes only providers represented in the advertised model catalog; this is not the configured-connection inventory.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 36,
+            "w": 12,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": "(.catalog // {}) | to_entries[] | {provider:.key, name:(.value.provider // .key), listed:(.value.models // [] | length), active:(.value.active // false)}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "name",
+                  "text": "Display name",
+                  "type": "string"
+                },
+                {
+                  "selector": "listed",
+                  "text": "Listed models",
+                  "type": "number"
+                },
+                {
+                  "selector": "active",
+                  "text": "Active in catalog",
+                  "type": "boolean"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Active in catalog"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "YES",
+                            "color": "green"
+                          },
+                          "false": {
+                            "text": "NO",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 23,
+          "type": "table",
+          "title": "Provider / connection / model health (24h)",
+          "description": "Live nested provider->account->model status from /api/providers/health-matrix?range=24h. One row per provider, account and observed/synced model. Shows lockouts and recent quality, NOT all advertised models.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 48,
+            "w": 24,
+            "h": 16
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/providers/health-matrix?range=24h",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".providers[] | .provider as $provider | .accounts[]? | .label as $account | .models[]? | {provider:$provider, account:$account, model:.model, status:.status, locked:.isLockedOut, reason:(.lockoutReason // \"\"), requests:.requests, successes:.successes, success_rate:.successRate, latency:.avgLatencyMs, last_status:.lastStatus, last_error:(.lastErrorAt // \"\")}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "account",
+                  "text": "Account",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Model",
+                  "type": "string"
+                },
+                {
+                  "selector": "status",
+                  "text": "Model health",
+                  "type": "string"
+                },
+                {
+                  "selector": "locked",
+                  "text": "Locked",
+                  "type": "boolean"
+                },
+                {
+                  "selector": "reason",
+                  "text": "Lockout reason",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests / 24h",
+                  "type": "number"
+                },
+                {
+                  "selector": "successes",
+                  "text": "Successes / 24h",
+                  "type": "number"
+                },
+                {
+                  "selector": "success_rate",
+                  "text": "Success %",
+                  "type": "number"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Avg latency ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "last_status",
+                  "text": "HTTP",
+                  "type": "number"
+                },
+                {
+                  "selector": "last_error",
+                  "text": "Last error",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Account"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FBBF24"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model health"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "healthy": {
+                            "text": "HEALTHY",
+                            "color": "green"
+                          },
+                          "degraded": {
+                            "text": "DEGRADED",
+                            "color": "yellow"
+                          },
+                          "error": {
+                            "text": "ERROR",
+                            "color": "red"
+                          },
+                          "locked": {
+                            "text": "LOCKED",
+                            "color": "red"
+                          },
+                          "idle": {
+                            "text": "IDLE",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Locked"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "LOCKED",
+                            "color": "red"
+                          },
+                          "false": {
+                            "text": "CLEAR",
+                            "color": "green"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Lockout reason"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FCA5A5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Success %"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 75
+                        },
+                        {
+                          "color": "green",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg latency ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "HTTP"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 300
+                        },
+                        {
+                          "color": "red",
+                          "value": 400
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "Provider models — advertised catalog",
+          "description": "Live /api/models/catalog grouped by provider. Models advertised to clients; no inference test and not a promise that provider quota/auth is healthy. Provider + model ID are the authoritative inventory fields.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 64,
+            "w": 24,
+            "h": 18
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": "(.catalog // {}) | to_entries[] | .key as $provider | .value as $bucket | ($bucket.models // [])[] | {provider:$provider, model:.id, name:(.name // .id), kind:(.type // \"chat\"), context:(.context_length // null), output:(.max_output_tokens // null), custom:(.custom // false), free:(.free // false)}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Model ID",
+                  "type": "string"
+                },
+                {
+                  "selector": "name",
+                  "text": "Display name",
+                  "type": "string"
+                },
+                {
+                  "selector": "kind",
+                  "text": "Type",
+                  "type": "string"
+                },
+                {
+                  "selector": "context",
+                  "text": "Context tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "output",
+                  "text": "Max output tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "custom",
+                  "text": "Custom",
+                  "type": "boolean"
+                },
+                {
+                  "selector": "free",
+                  "text": "Free",
+                  "type": "boolean"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model ID"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Type"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#93C5FD"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Custom"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "YES",
+                            "color": "green"
+                          },
+                          "false": {
+                            "text": "NO",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Free"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "YES",
+                            "color": "green"
+                          },
+                          "false": {
+                            "text": "NO",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            },
+            "sortBy": [
+              {
+                "displayName": "Provider",
+                "desc": false
+              }
+            ]
           }
         },
         {
@@ -729,7 +2358,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 28,
+            "y": 82,
             "w": 24,
             "h": 14
           },
@@ -818,7 +2447,250 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "HTTP"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 300
+                        },
+                        {
+                          "color": "red",
+                          "value": 400
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Requested model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Executed model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Account"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FBBF24"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Duration ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "In flight"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "true": {
+                            "text": "RUNNING",
+                            "color": "blue"
+                          },
+                          "false": {
+                            "text": "DONE",
+                            "color": "gray"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Error"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FCA5A5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -839,7 +2711,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 42,
+            "y": 96,
             "w": 12,
             "h": 10
           },
@@ -908,7 +2780,197 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "HTTP"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 300
+                        },
+                        {
+                          "color": "red",
+                          "value": 400
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Requested"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Executed model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Duration ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Error"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#FCA5A5"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -929,7 +2991,7 @@ data:
           },
           "gridPos": {
             "x": 12,
-            "y": 42,
+            "y": 96,
             "w": 12,
             "h": 10
           },
@@ -993,7 +3055,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 52,
+            "y": 106,
             "w": 10,
             "h": 18
           },
@@ -1054,7 +3116,7 @@ data:
           },
           "gridPos": {
             "x": 10,
-            "y": 52,
+            "y": 106,
             "w": 14,
             "h": 18
           },
@@ -1122,6 +3184,27 @@ data:
               {
                 "matcher": {
                   "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
                   "options": "Health"
                 },
                 "properties": [
@@ -1154,6 +3237,50 @@ data:
                     }
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Success rate"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 75
+                        },
+                        {
+                          "color": "green",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
               }
             ]
           },
@@ -1182,7 +3309,7 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 70,
+            "y": 124,
             "w": 14,
             "h": 12
           },
@@ -1236,7 +3363,94 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Executed model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg latency ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -1257,7 +3471,7 @@ data:
           },
           "gridPos": {
             "x": 14,
-            "y": 70,
+            "y": 124,
             "w": 10,
             "h": 12
           },
@@ -1316,7 +3530,73 @@ data:
                 }
               }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Provider"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#60A5FA"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg latency ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              }
+            ]
           },
           "options": {
             "showHeader": true,
@@ -1337,9 +3617,9 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 82,
+            "y": 136,
             "w": 24,
-            "h": 7
+            "h": 8
           },
           "targets": [
             {
@@ -1401,90 +3681,181 @@ data:
                 }
               }
             },
-            "overrides": []
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false
-            }
-          }
-        },
-        {
-          "id": 4,
-          "type": "table",
-          "title": "Available model catalog",
-          "description": "Models advertised by OmniRoute /api/models/catalog (not verified with paid inference). Includes model IDs to copy into clients.",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "omniroute-api"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 89,
-            "w": 24,
-            "h": 13
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "type": "json",
-              "format": "table",
-              "source": "url",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
-              "url_options": {
-                "method": "GET"
-              },
-              "parser": "jq-backend",
-              "root_selector": ".catalog | to_entries | [ .[] | .key as $provider | .value.models[] | {provider:$provider, id:.id, name:.name, type:.type} ]",
-              "columns": [
-                {
-                  "selector": "provider",
-                  "text": "Provider",
-                  "type": "string"
-                },
-                {
-                  "selector": "id",
-                  "text": "Model ID",
-                  "type": "string"
-                },
-                {
-                  "selector": "name",
-                  "text": "Display name",
-                  "type": "string"
-                },
-                {
-                  "selector": "type",
-                  "text": "Type",
-                  "type": "string"
-                }
-              ]
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false
-            },
-            "sortBy": [
+            "overrides": [
               {
-                "displayName": "Provider",
-                "desc": false
+                "matcher": {
+                  "id": "byName",
+                  "options": "Combo"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#B4A0FF"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "#4ADE80"
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failures"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "red",
+                          "value": 1
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg latency ms"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 3000
+                        },
+                        {
+                          "color": "red",
+                          "value": 15000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Success %"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "thresholds"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 75
+                        },
+                        {
+                          "color": "green",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
               }
             ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
           }
         },
         {
@@ -1493,133 +3864,13 @@ data:
           "title": "Data scope & interpretation",
           "gridPos": {
             "x": 0,
-            "y": 102,
+            "y": 144,
             "w": 24,
-            "h": 5
+            "h": 6
           },
           "options": {
             "mode": "markdown",
-            "content": "**Live routing** comes from OmniRoute Combos and model-to-Combo mappings. These are runtime objects, not the GitOps desired-state file. The routing tables list up to 100 records per collection. **Direct aliases** and **Settings aliases** are displayed separately; they are not Combo routes. \n\n**Last 100 requests** is a fixed sample, independent of Grafana's time picker. The latency plot and recent errors also use this sample. **Provider health** and its request counter always cover the API's fixed 24h window. **Historical calls** and provider/model totals cover retained records, not the selected time interval. **Combo activity** is in-memory per-process telemetry and can reset on restart; it is not a 24h historical total. \n\n**HTTP probe:** OCO VictoriaMetrics. **All other panels:** OmniRoute native read-only REST API through Grafana Infinity. No inference probes, pricing requests, or mutation calls are generated by this dashboard."
-          }
-        },
-        {
-          "id": 19,
-          "type": "table",
-          "title": "Direct model aliases (non-Combo)",
-          "description": "Live /api/models/alias aliases; Combo mappings are shown separately above.",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "omniroute-api"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 107,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "type": "json",
-              "format": "table",
-              "source": "url",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/alias",
-              "url_options": {
-                "method": "GET"
-              },
-              "parser": "jq-backend",
-              "root_selector": ".aliases | to_entries[] | {alias:.key, target:.value}",
-              "columns": [
-                {
-                  "selector": "alias",
-                  "text": "Alias",
-                  "type": "string"
-                },
-                {
-                  "selector": "target",
-                  "text": "Direct target",
-                  "type": "string"
-                }
-              ]
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false
-            }
-          }
-        },
-        {
-          "id": 20,
-          "type": "table",
-          "title": "Settings custom aliases",
-          "description": "Live /api/settings/model-aliases custom aliases, independent of Combo mappings.",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "omniroute-api"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 107,
-            "w": 12,
-            "h": 8
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "type": "json",
-              "format": "table",
-              "source": "url",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/settings/model-aliases",
-              "url_options": {
-                "method": "GET"
-              },
-              "parser": "jq-backend",
-              "root_selector": "(.custom // {}) | to_entries[] | {alias:.key, target:.value}",
-              "columns": [
-                {
-                  "selector": "alias",
-                  "text": "Alias",
-                  "type": "string"
-                },
-                {
-                  "selector": "target",
-                  "text": "Settings target",
-                  "type": "string"
-                }
-              ]
-            }
-          ],
-          "fieldConfig": {
-            "defaults": {
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                }
-              }
-            },
-            "overrides": []
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false
-            }
+            "content": "**Field colors:** Alias/pattern = teal; Combo = violet; Provider = blue; Model/target = green; Account/connection = amber. Status cells are green/yellow/red; numeric errors and latency use color thresholds. The same semantic fields use the same colors across all tables.\n\n**Route definitions:** `/api/model-combo-mappings` + `/api/combos`. Direct and Settings aliases are independent legacy/native OmniRoute maps and are shown for visibility, **not** represented as Combo routes. These tables show the live configuration, not GitOps aliases.json.\n\n**Model inventory:** Advertised provider/model inventory uses `/api/models/catalog`; configured account state and observed per-account model health use `/api/providers/health-matrix?range=24h`. Listed != verified/available. The first 100 of each Combo/mapping set are displayed; a separate client page may be needed if the collection grows past 100.\n\n**Traffic windows:** Last 100 requests, errors and latency sample ignore the Grafana time picker. Provider health is always 24h; retained provider/model totals cover stored history. Combo usage counters are per-process and can reset at restart.\n\n**Sources:** OmniRoute native read-only REST API (Grafana Infinity) except HTTP liveness from OCO VictoriaMetrics. No extra jobs or paid inference requests."
           }
         }
       ]
