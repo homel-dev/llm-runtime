@@ -64,29 +64,6 @@ async function upsertConnection({ provider, name, apiKey, defaultModel, provider
   return payload?.connection ?? payload;
 }
 
-async function setAlias(from, to) {
-  // The Settings alias endpoint performs deprecation rewrites inside the
-  // provider executor. Use the model routing endpoint instead.
-  const legacy = await api("/api/settings/model-aliases");
-  const oldTarget = legacy.custom?.[from];
-  if (oldTarget !== undefined && oldTarget !== to) {
-    throw new Error(`Refusing to replace unrelated Settings alias ${from}`);
-  }
-  const routing = await api("/api/models/alias");
-  if (routing.aliases?.[from] !== to) {
-    await api("/api/models/alias", {
-      method: "PUT",
-      body: { alias: from, model: to },
-    });
-  }
-  if (oldTarget === to) {
-    await api("/api/settings/model-aliases", {
-      method: "DELETE",
-      body: { from },
-    });
-  }
-}
-
 const glm = await upsertConnection({
   provider: "glm",
   name: "llm-runtime GLM Coding Plan",
@@ -134,19 +111,6 @@ for (const connection of [large]) {
   });
 }
 
-const aliases = {
-  "gpt-5.6-sol": "codex/gpt-5.6-sol",
-  "gemini-subscription-pro": "agy/gemini-pro-agent",
-  "gemini-subscription-auto": "agy/gemini-3.7-flash-medium",
-  "glm-5.3": "glm/glm-5.3",
-  "glm-5.3-flash": "glm/glm-5.3-flash",
-//  "llm-small": "llama-cpp/Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
-  "llm-large": "vllm/Qwen3-32B-AWQ",
-};
-
-for (const [from, to] of Object.entries(aliases)) {
-  await setAlias(from, to);
-}
 
 const connections = await listConnections();
 const oauth = {
@@ -159,7 +123,6 @@ const result = {
     glm: glm.id,
     //small: small.id,
     large: large.id,
-    aliases,
   },
   nativeOAuth: oauth,
   readyForFullRuntimeCheck: oauth.codex && oauth.agy,

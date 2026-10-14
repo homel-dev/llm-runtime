@@ -34,6 +34,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: runtime-operator-check
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: omniroute-alias-sync
       ports:
         - { protocol: TCP, port: 20128 }
     - from:

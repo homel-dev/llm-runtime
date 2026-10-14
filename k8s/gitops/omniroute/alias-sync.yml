@@ -1,0 +1,98 @@
+# Declarative RR model aliases. This Job runs once per desired-state revision:
+# the Kustomize ConfigMap hash changes its Pod template, so Flux recreates
+# only this completed Job (not OmniRoute) via the scoped force annotation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omniroute-rr-alias-state
+  namespace: llm-runtime
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: Merge
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: omniroute-alias-sync
+  namespace: llm-runtime
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: omniroute-alias-sync
+  namespace: llm-runtime
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [omniroute-rr-alias-state]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omniroute-alias-sync
+  namespace: llm-runtime
+subjects:
+  - kind: ServiceAccount
+    name: omniroute-alias-sync
+    namespace: llm-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: omniroute-alias-sync
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: omniroute-alias-sync
+  namespace: llm-runtime
+  labels:
+    app.kubernetes.io/name: omniroute-alias-sync
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 8
+  activeDeadlineSeconds: 800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: omniroute-alias-sync
+    spec:
+      restartPolicy: Never
+      serviceAccountName: omniroute-alias-sync
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sync
+          image: docker.io/library/node:22.16.0-alpine3.22
+          imagePullPolicy: IfNotPresent
+          command: [node, /sync/alias-reconcile.mjs]
+          env:
+            - name: OR_BASE_URL
+              value: http://omniroute.llm-runtime.svc.cluster.local:20128
+            - name: OR_MANAGEMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: omniroute-operator-token
+                  key: token
+          volumeMounts:
+            - name: aliases
+              mountPath: /sync
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 10m, memory: 48Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+      volumes:
+        - name: aliases
+          configMap:
+            name: omniroute-rr-alias-config

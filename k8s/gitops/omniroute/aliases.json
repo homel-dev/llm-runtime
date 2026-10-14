@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "aliases": {
+    "coder": "glm/glm-5.3",
+    "planner": "codex/gpt-5.6-sol",
+    "reviewer": "codex/gpt-5.6-sol",
+    "enricher": "agy/gemini-3.8-flash-high",
+    "failure-analyst": "glm/glm-5.3",
+    "materializer": "glm/glm-5.3",
+    "gpt-5.6-sol": "codex/gpt-5.6-sol",
+    "gemini-subscription-pro": "agy/gemini-3.8-flash-high",
+    "gemini-subscription-auto": "agy/gemini-3.8-flash-high",
+    "glm-5.3": "glm/glm-5.3",
+    "glm-5.3-flash": "glm/glm-5.3-flash",
+    "llm-large": "vllm/Qwen3-32B-AWQ"
+  }
+}
