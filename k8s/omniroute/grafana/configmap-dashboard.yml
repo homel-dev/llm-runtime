@@ -10,15 +10,17 @@ data:
   llm-runtime-omniroute-providers.json: |
     {
       "uid": "llm-runtime-omniroute-providers",
-      "title": "LLM Runtime / OmniRoute Providers & Models",
-      "description": "Compact live provider health and model catalog. Configuration owned by llm-runtime, visualized in OCO Grafana.",
+      "title": "LLM Runtime / OmniRoute Routing & Activity",
+      "description": "Live Combo routing, alias mappings, provider and model activity, and recent calls from OmniRoute REST plus OCO liveness.",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "id": null,
       "tags": [
         "llm-runtime",
         "omniroute",
-        "providers"
+        "routing",
+        "combos",
+        "observability"
       ],
       "timezone": "browser",
       "refresh": "1m",
@@ -45,7 +47,7 @@ data:
           "gridPos": {
             "x": 0,
             "y": 0,
-            "w": 6,
+            "w": 4,
             "h": 4
           },
           "targets": [
@@ -104,19 +106,957 @@ data:
           }
         },
         {
-          "id": 2,
-          "type": "table",
-          "title": "Provider health",
-          "description": "OmniRoute provider health matrix. Health is derived from request outcomes, cooldowns, lockouts and account state; idle providers are not independently verified by this view.",
+          "id": 5,
+          "type": "stat",
+          "title": "Combos",
+          "description": "Live number of configured OmniRoute Combos; first party management API.",
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "omniroute-api"
           },
           "gridPos": {
-            "x": 6,
+            "x": 4,
             "y": 0,
-            "w": 18,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/combos?limit=100&offset=0",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ". | [{value:(.total // 0)}] | .[]",
+              "columns": [
+                {
+                  "selector": "value",
+                  "text": "Value",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "NO DATA",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 6,
+          "type": "stat",
+          "title": "Route mappings",
+          "description": "Live model-to-Combo mappings, including disabled ones.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/model-combo-mappings?limit=100&offset=0",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ". | [{value:(.total // 0)}] | .[]",
+              "columns": [
+                {
+                  "selector": "value",
+                  "text": "Value",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "NO DATA",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 7,
+          "type": "stat",
+          "title": "Requests / 24h",
+          "description": "Provider health-matrix window, fixed 24h (not Grafana range).",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/providers/health-matrix?range=24h",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ". | [{value:([.providers[]?.requests // 0] | add // 0)}] | .[]",
+              "columns": [
+                {
+                  "selector": "value",
+                  "text": "Value",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "NO DATA",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 8,
+          "type": "stat",
+          "title": "Historical calls",
+          "description": "Total retained call-log records aggregated by provider (not 24h).",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 16,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ". | [{value:([.providers[]?.totalRequests // 0] | add // 0)}] | .[]",
+              "columns": [
+                {
+                  "selector": "value",
+                  "text": "Value",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "NO DATA",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 9,
+          "type": "stat",
+          "title": "Healthy providers",
+          "description": "Number of providers with health state healthy in 24h matrix.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 20,
+            "y": 0,
+            "w": 4,
+            "h": 4
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/providers/health-matrix?range=24h",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ". | [{value:([.providers[]? | select(.state == \"healthy\")] | length)}] | .[]",
+              "columns": [
+                {
+                  "selector": "value",
+                  "text": "Value",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "noValue": "NO DATA",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          }
+        },
+        {
+          "id": 10,
+          "type": "table",
+          "title": "Routing: alias / role → Combo → targets",
+          "description": "Live OmniRoute model-to-Combo mappings joined by Combo ID to configured Combos. Outer join retains missing/unmatched references. First 100 of each.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 24,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/model-combo-mappings?limit=100&offset=0",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".mappings[] | {alias:.pattern, join_id:.comboId, enabled:.enabled, priority:.priority}",
+              "columns": [
+                {
+                  "selector": "alias",
+                  "text": "Alias / pattern",
+                  "type": "string"
+                },
+                {
+                  "selector": "join_id",
+                  "text": "Combo ID",
+                  "type": "string"
+                },
+                {
+                  "selector": "enabled",
+                  "text": "Enabled",
+                  "type": "boolean"
+                },
+                {
+                  "selector": "priority",
+                  "text": "Priority",
+                  "type": "number"
+                }
+              ]
+            },
+            {
+              "refId": "B",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/combos?limit=100&offset=0",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".combos[] | {join_id:.id, combo:.name, strategy:.strategy, targets:(.models // [] | map(if type == \"string\" then . elif .kind == \"combo-ref\" then (\"combo/\" + (.comboName // \"?\")) elif .kind == \"provider-wildcard\" then ((.providerId // \"?\") + \"/\" + (.modelPattern // \"*\")) else (.model // \"?\") end) | join(\" -> \"))}",
+              "columns": [
+                {
+                  "selector": "join_id",
+                  "text": "Combo ID",
+                  "type": "string"
+                },
+                {
+                  "selector": "combo",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "strategy",
+                  "text": "Strategy",
+                  "type": "string"
+                },
+                {
+                  "selector": "targets",
+                  "text": "Targets (ordered)",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {
+                "byField": "Combo ID",
+                "mode": "outerTabular"
+              }
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "type": "table",
+          "title": "Combos: definition and ordered targets",
+          "description": "Live Combo definitions (up to 100), including empty Combos and nested references; member ordering is meaningful for priority routing.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 16,
+            "w": 14,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/combos?limit=100&offset=0",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".combos[] | {name:.name, strategy:.strategy, members:(.models // [] | length), targets:(.models // [] | map(if type == \"string\" then . elif .kind == \"combo-ref\" then (\"combo/\" + (.comboName // \"?\")) elif .kind == \"provider-wildcard\" then ((.providerId // \"?\") + \"/\" + (.modelPattern // \"*\")) else (.model // \"?\") end) | join(\" -> \")), context:.computed_context_length, id:.id}",
+              "columns": [
+                {
+                  "selector": "name",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "strategy",
+                  "text": "Strategy",
+                  "type": "string"
+                },
+                {
+                  "selector": "members",
+                  "text": "Steps",
+                  "type": "number"
+                },
+                {
+                  "selector": "targets",
+                  "text": "Targets (ordered)",
+                  "type": "string"
+                },
+                {
+                  "selector": "context",
+                  "text": "Context tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "id",
+                  "text": "Combo ID",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 12,
+          "type": "table",
+          "title": "Combo activity (process lifetime)",
+          "description": "In-memory counters; resets on process restart. A missing row means no activity recorded for that Combo in the current process.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 14,
+            "y": 16,
+            "w": 10,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/combos/metrics",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".metrics | to_entries[] | select(.value != null) | {combo:.key, requests:.value.totalRequests, successes:.value.totalSuccesses, failures:.value.totalFailures, fallbacks:.value.totalFallbacks, success_rate:.value.successRate, fallback_rate:.value.fallbackRate, latency:.value.avgLatencyMs, last:.value.lastUsedAt}",
+              "columns": [
+                {
+                  "selector": "combo",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests",
+                  "type": "number"
+                },
+                {
+                  "selector": "successes",
+                  "text": "Successes",
+                  "type": "number"
+                },
+                {
+                  "selector": "failures",
+                  "text": "Failures",
+                  "type": "number"
+                },
+                {
+                  "selector": "fallbacks",
+                  "text": "Fallbacks",
+                  "type": "number"
+                },
+                {
+                  "selector": "success_rate",
+                  "text": "Success %",
+                  "type": "number"
+                },
+                {
+                  "selector": "fallback_rate",
+                  "text": "Fallback %",
+                  "type": "number"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Avg latency ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "last",
+                  "text": "Last used",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 13,
+          "type": "table",
+          "title": "Recent requests (last 100, non-test)",
+          "description": "Newest persisted/active requests from OmniRoute; fixed 100-row sample, not bounded by Grafana time picker. No prompt or response body.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 28,
+            "w": 24,
+            "h": 14
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=100&excludeTests=1",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".[] | {time:.timestamp, status:.status, combo:.comboName, requested:.requestedModel, model:.model, provider:.provider, account:.account, duration:.duration, tokens_in:.tokens.in, tokens_out:.tokens.out, active:.active, error:.error}",
+              "columns": [
+                {
+                  "selector": "time",
+                  "text": "Time",
+                  "type": "string"
+                },
+                {
+                  "selector": "status",
+                  "text": "HTTP",
+                  "type": "number"
+                },
+                {
+                  "selector": "combo",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "requested",
+                  "text": "Requested model",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Executed model",
+                  "type": "string"
+                },
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "account",
+                  "text": "Account",
+                  "type": "string"
+                },
+                {
+                  "selector": "duration",
+                  "text": "Duration ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "tokens_in",
+                  "text": "Input tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "tokens_out",
+                  "text": "Output tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "active",
+                  "text": "In flight",
+                  "type": "boolean"
+                },
+                {
+                  "selector": "error",
+                  "text": "Error",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 14,
+          "type": "table",
+          "title": "Recent failures (among last 100)",
+          "description": "Only errors found in the last-100-request sample; an empty table does not establish zero failures in 24h.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 42,
+            "w": 12,
             "h": 10
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=100&excludeTests=1",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".[] | select(((.status // 0) >= 400) or ((.error // \"\") != \"\")) | {time:.timestamp, status:.status, combo:.comboName, requested:.requestedModel, model:.model, provider:.provider, duration:.duration, error:.error}",
+              "columns": [
+                {
+                  "selector": "time",
+                  "text": "Time",
+                  "type": "string"
+                },
+                {
+                  "selector": "status",
+                  "text": "HTTP",
+                  "type": "number"
+                },
+                {
+                  "selector": "combo",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "requested",
+                  "text": "Requested",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Executed model",
+                  "type": "string"
+                },
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "duration",
+                  "text": "Duration ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "error",
+                  "text": "Error",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 15,
+          "type": "timeseries",
+          "title": "Request latency — last 100 calls",
+          "description": "Scatter-like sequence of completed call durations from the last-100-request sample. Not a historical time-bucketed graph and not restricted by Grafana time range.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 42,
+            "w": 12,
+            "h": 10
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "timeseries",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=100&excludeTests=1",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": "[.[] | select((.timestamp != null) and ((.status // 0) >= 200) and (.duration != null)) | {time:.timestamp, latency:.duration}] | sort_by(.time)[]",
+              "columns": [
+                {
+                  "selector": "time",
+                  "text": "Time",
+                  "type": "timestamp"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Latency ms",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": {
+                "drawStyle": "points",
+                "showPoints": "always",
+                "pointSize": 4,
+                "lineWidth": 0,
+                "spanNulls": false
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {
+              "mode": "single"
+            },
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          }
+        },
+        {
+          "id": 16,
+          "type": "barchart",
+          "title": "Provider calls (retained history)",
+          "description": "Retained call-log total per provider; not a rate and not constrained to Grafana range.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 52,
+            "w": 10,
+            "h": 18
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".providers[] | {provider:.provider, requests:.totalRequests}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "xField": "Provider",
+            "showValue": "auto",
+            "groupWidth": 0.7,
+            "barWidth": 0.8,
+            "legend": {
+              "displayMode": "hidden"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          }
+        },
+        {
+          "id": 2,
+          "type": "table",
+          "title": "Provider health",
+          "description": "OmniRoute provider health matrix. Health is derived from request outcomes, cooldowns, lockouts and account state; idle providers are not independently verified by this view. Window fixed at 24h; Grafana time picker does not control this endpoint.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 10,
+            "y": 52,
+            "w": 14,
+            "h": 18
           },
           "targets": [
             {
@@ -232,18 +1172,243 @@ data:
           }
         },
         {
-          "id": 3,
-          "type": "text",
-          "title": "Reading the status",
+          "id": 17,
+          "type": "table",
+          "title": "Model activity (retained history)",
+          "description": "Per executed provider/model totals from retained call logs; 24h Grafana range does not apply.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
           "gridPos": {
             "x": 0,
-            "y": 4,
-            "w": 6,
-            "h": 6
+            "y": 70,
+            "w": 14,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".models[] | {provider:.provider, model:.model, requests:.requests, successes:.successfulRequests, avg_latency:.avgLatencyMs}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Executed model",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests",
+                  "type": "number"
+                },
+                {
+                  "selector": "successes",
+                  "text": "Successes",
+                  "type": "number"
+                },
+                {
+                  "selector": "avg_latency",
+                  "text": "Avg latency ms",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
           },
           "options": {
-            "mode": "markdown",
-            "content": "**HTTP UP** means the router responds to its `/healthz` probe.\n\n**Provider health** is based on OmniRoute observations and does not guarantee every model can run.\n\n**Catalogued model** means advertised/selectable, not a successful inference.\n\nData sources: OCO VictoriaMetrics and OmniRoute read-only HTTP API."
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 18,
+          "type": "table",
+          "title": "Provider totals, tokens, latency (history)",
+          "description": "Retained call logs aggregated by provider; token columns are from this API and may be null if unrecorded.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 14,
+            "y": 70,
+            "w": 10,
+            "h": 12
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".providers[] | {provider:.provider, requests:.totalRequests, successes:.successfulRequests, latency:.avgLatencyMs, tokens_in:.totalTokensIn, tokens_out:.totalTokensOut}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests",
+                  "type": "number"
+                },
+                {
+                  "selector": "successes",
+                  "text": "Successes",
+                  "type": "number"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Avg latency ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "tokens_in",
+                  "text": "Input tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "tokens_out",
+                  "text": "Output tokens",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 21,
+          "type": "table",
+          "title": "Per-model Combo execution (process lifetime)",
+          "description": "Execution success and average latency by model within Combo; in-memory counters only.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 82,
+            "w": 24,
+            "h": 7
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/combos/metrics",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".metrics | to_entries[] | select(.value != null) | .key as $combo | .value.byModel | to_entries[] | {combo:$combo, model:.key, requests:.value.requests, successes:.value.successes, failures:.value.failures, latency:.value.avgLatencyMs, success_rate:.value.successRate}",
+              "columns": [
+                {
+                  "selector": "combo",
+                  "text": "Combo",
+                  "type": "string"
+                },
+                {
+                  "selector": "model",
+                  "text": "Model",
+                  "type": "string"
+                },
+                {
+                  "selector": "requests",
+                  "text": "Requests",
+                  "type": "number"
+                },
+                {
+                  "selector": "successes",
+                  "text": "Successes",
+                  "type": "number"
+                },
+                {
+                  "selector": "failures",
+                  "text": "Failures",
+                  "type": "number"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Avg latency ms",
+                  "type": "number"
+                },
+                {
+                  "selector": "success_rate",
+                  "text": "Success %",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
           }
         },
         {
@@ -257,9 +1422,9 @@ data:
           },
           "gridPos": {
             "x": 0,
-            "y": 10,
+            "y": 89,
             "w": 24,
-            "h": 15
+            "h": 13
           },
           "targets": [
             {
@@ -320,6 +1485,141 @@ data:
                 "desc": false
               }
             ]
+          }
+        },
+        {
+          "id": 3,
+          "type": "text",
+          "title": "Data scope & interpretation",
+          "gridPos": {
+            "x": 0,
+            "y": 102,
+            "w": 24,
+            "h": 5
+          },
+          "options": {
+            "mode": "markdown",
+            "content": "**Live routing** comes from OmniRoute Combos and model-to-Combo mappings. These are runtime objects, not the GitOps desired-state file. The routing tables list up to 100 records per collection. **Direct aliases** and **Settings aliases** are displayed separately; they are not Combo routes. \n\n**Last 100 requests** is a fixed sample, independent of Grafana's time picker. The latency plot and recent errors also use this sample. **Provider health** and its request counter always cover the API's fixed 24h window. **Historical calls** and provider/model totals cover retained records, not the selected time interval. **Combo activity** is in-memory per-process telemetry and can reset on restart; it is not a 24h historical total. \n\n**HTTP probe:** OCO VictoriaMetrics. **All other panels:** OmniRoute native read-only REST API through Grafana Infinity. No inference probes, pricing requests, or mutation calls are generated by this dashboard."
+          }
+        },
+        {
+          "id": 19,
+          "type": "table",
+          "title": "Direct model aliases (non-Combo)",
+          "description": "Live /api/models/alias aliases; Combo mappings are shown separately above.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 107,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/alias",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": ".aliases | to_entries[] | {alias:.key, target:.value}",
+              "columns": [
+                {
+                  "selector": "alias",
+                  "text": "Alias",
+                  "type": "string"
+                },
+                {
+                  "selector": "target",
+                  "text": "Direct target",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
+          }
+        },
+        {
+          "id": 20,
+          "type": "table",
+          "title": "Settings custom aliases",
+          "description": "Live /api/settings/model-aliases custom aliases, independent of Combo mappings.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 107,
+            "w": 12,
+            "h": 8
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/settings/model-aliases",
+              "url_options": {
+                "method": "GET"
+              },
+              "parser": "jq-backend",
+              "root_selector": "(.custom // {}) | to_entries[] | {alias:.key, target:.value}",
+              "columns": [
+                {
+                  "selector": "alias",
+                  "text": "Alias",
+                  "type": "string"
+                },
+                {
+                  "selector": "target",
+                  "text": "Settings target",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false
+            }
           }
         }
       ]
