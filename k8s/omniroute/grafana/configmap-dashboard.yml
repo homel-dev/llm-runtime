@@ -1603,8 +1603,8 @@ data:
         {
           "id": 24,
           "type": "table",
-          "title": "Providers — advertised model counts",
-          "description": "Live provider buckets from /api/models/catalog. Includes only providers represented in the advertised model catalog; this is not the configured-connection inventory.",
+          "title": "Providers — static model registry counts",
+          "description": "Static provider model registry via the management GET /api/models endpoint. Not the full dynamically synced provider catalog; see model health for connection-level discovered models.",
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "omniroute-api"
@@ -1621,12 +1621,12 @@ data:
               "type": "json",
               "format": "table",
               "source": "url",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models",
               "url_options": {
                 "method": "GET"
               },
               "parser": "jq-backend",
-              "root_selector": "(.catalog // {}) | to_entries[] | {provider:.key, name:(.value.provider // .key), listed:(.value.models // [] | length), active:(.value.active // false)}",
+              "root_selector": "(.models // []) | group_by(.provider)[] | {provider:(.[0].provider // \"unknown\"), name:\"Static registry\", listed:length, active:any(.[]; .available == true)}",
               "columns": [
                 {
                   "selector": "provider",
@@ -1635,7 +1635,7 @@ data:
                 },
                 {
                   "selector": "name",
-                  "text": "Display name",
+                  "text": "Source",
                   "type": "string"
                 },
                 {
@@ -1645,7 +1645,7 @@ data:
                 },
                 {
                   "selector": "active",
-                  "text": "Active in catalog",
+                  "text": "Any available",
                   "type": "boolean"
                 }
               ]
@@ -1685,7 +1685,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Active in catalog"
+                  "options": "Any available"
                 },
                 "properties": [
                   {
@@ -2126,8 +2126,8 @@ data:
         {
           "id": 4,
           "type": "table",
-          "title": "Provider models — advertised catalog",
-          "description": "Live /api/models/catalog grouped by provider. Models advertised to clients; no inference test and not a promise that provider quota/auth is healthy. Provider + model ID are the authoritative inventory fields.",
+          "title": "Provider models — static registry",
+          "description": "Management GET /api/models returns configured-eligible static registry entries and availability hints. For synced, connection-specific discovery and health see Provider / connection / model health.",
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "omniroute-api"
@@ -2144,12 +2144,12 @@ data:
               "type": "json",
               "format": "table",
               "source": "url",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models/catalog",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/models",
               "url_options": {
                 "method": "GET"
               },
               "parser": "jq-backend",
-              "root_selector": "(.catalog // {}) | to_entries[] | .key as $provider | .value as $bucket | ($bucket.models // [])[] | {provider:$provider, model:.id, name:(.name // .id), kind:(.type // \"chat\"), context:(.context_length // null), output:(.max_output_tokens // null), custom:(.custom // false), free:(.free // false)}",
+              "root_selector": "(.models // [])[] | {provider:(.provider // \"unknown\"), model:(.fullModel // ((.provider // \"unknown\") + \"/\" + (.model // \"unknown\"))), name:(.name // .model), available:(.available // false), vision:(.supportsVision // false)}",
               "columns": [
                 {
                   "selector": "provider",
@@ -2167,28 +2167,13 @@ data:
                   "type": "string"
                 },
                 {
-                  "selector": "kind",
-                  "text": "Type",
-                  "type": "string"
-                },
-                {
-                  "selector": "context",
-                  "text": "Context tokens",
-                  "type": "number"
-                },
-                {
-                  "selector": "output",
-                  "text": "Max output tokens",
-                  "type": "number"
-                },
-                {
-                  "selector": "custom",
-                  "text": "Custom",
+                  "selector": "available",
+                  "text": "Available",
                   "type": "boolean"
                 },
                 {
-                  "selector": "free",
-                  "text": "Free",
+                  "selector": "vision",
+                  "text": "Supports vision",
                   "type": "boolean"
                 }
               ]
@@ -2249,7 +2234,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Type"
+                  "options": "Display name"
                 },
                 "properties": [
                   {
@@ -2270,7 +2255,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Custom"
+                  "options": "Available"
                 },
                 "properties": [
                   {
@@ -2302,7 +2287,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Free"
+                  "options": "Supports vision"
                 },
                 "properties": [
                   {
