@@ -39,16 +39,44 @@ export function validateDesired(raw) {
   return map;
 }
 
+// Socket errors from undici do not include the useful cause in Error.message.
+// Only emit network diagnostics, never request headers or response bodies.
+function networkCode(error) {
+  const cause = error?.cause || error;
+  const nested = Array.isArray(cause?.errors) ? cause.errors : [cause];
+  return [...new Set(nested.map(value => value?.code || value?.name).filter(Boolean))].join(',') || 'UNKNOWN';
+}
+
 async function api(method, path, body, token) {
   const headers = { accept: 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const res = await fetch(`${omnirouteUrl}${path}`, {
-    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error(`OmniRoute ${method} ${path}: HTTP ${res.status}`);
-  return res.json();
+  const maxAttempts = 12;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let res;
+    try {
+      res = await fetch(`${omnirouteUrl}${path}`, {
+        method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (error) {
+      const code = networkCode(error);
+      if (attempt === maxAttempts) {
+        throw new Error(`OmniRoute ${method} ${path}: network ${code} after ${attempt} attempts`);
+      }
+      console.error(`OmniRoute ${method} ${path}: network ${code}, retry ${attempt}/${maxAttempts}`);
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 5000)));
+      continue;
+    }
+    if (res.ok) return res.json();
+    if (![429, 502, 503, 504].includes(res.status) || attempt === maxAttempts) {
+      throw new Error(`OmniRoute ${method} ${path}: HTTP ${res.status}`);
+    }
+    console.error(`OmniRoute ${method} ${path}: HTTP ${res.status}, retry ${attempt}/${maxAttempts}`);
+    await res.body?.cancel();
+    await new Promise(resolve => setTimeout(resolve, Math.min(1000 * attempt, 5000)));
+  }
+  throw new Error(`OmniRoute ${method} ${path}: retries exhausted`);
 }
 
 // The state ConfigMap is created by Flux. Only get/patch on this named object

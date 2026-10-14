@@ -41,6 +41,39 @@ roleRef:
   kind: Role
   name: omniroute-alias-sync
 ---
+# Allow the one-shot Job to reach the OmniRoute API even when the namespace
+# has a default-deny egress policy. Also permit kube-apiserver and DNS access
+# for the ownership-state ConfigMap and Service resolution.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: omniroute-alias-sync-egress
+  namespace: llm-runtime
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: omniroute-alias-sync
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: omniroute
+      ports:
+        - { protocol: TCP, port: 20128 }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - ports:
+        - { protocol: TCP, port: 443 }
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
