@@ -1,49 +1,21 @@
-# Declarative RR model aliases. This Job runs once per desired-state revision:
-# the Kustomize ConfigMap hash changes its Pod template, so Flux recreates
-# only this completed Job (not OmniRoute) via the scoped force annotation.
+# Flux reconciles this Job on each aliases.json revision without restarting OmniRoute.
+# Store GitOps ownership state on a small persistent volume. The Kubernetes API
+# was unreachable from this restricted Job, so it must not be a runtime dependency.
 apiVersion: v1
-kind: ConfigMap
+kind: PersistentVolumeClaim
 metadata:
   name: omniroute-rr-alias-state
   namespace: llm-runtime
   annotations:
-    kustomize.toolkit.fluxcd.io/ssa: Merge
     kustomize.toolkit.fluxcd.io/prune: Disabled
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: omniroute-alias-sync
-  namespace: llm-runtime
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: omniroute-alias-sync
-  namespace: llm-runtime
-rules:
-  - apiGroups: [""]
-    resources: [configmaps]
-    resourceNames: [omniroute-rr-alias-state]
-    verbs: [get, patch]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: omniroute-alias-sync
-  namespace: llm-runtime
-subjects:
-  - kind: ServiceAccount
-    name: omniroute-alias-sync
-    namespace: llm-runtime
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: omniroute-alias-sync
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 64Mi
 ---
 # Allow the one-shot Job to reach the OmniRoute API even when the namespace
-# has a default-deny egress policy. Also permit kube-apiserver and DNS access
-# for the ownership-state ConfigMap and Service resolution.
+# has a default-deny egress policy. No Kubernetes API access is required.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -71,8 +43,6 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
-    - ports:
-        - { protocol: TCP, port: 443 }
 ---
 apiVersion: batch/v1
 kind: Job
@@ -92,12 +62,13 @@ spec:
         app.kubernetes.io/name: omniroute-alias-sync
     spec:
       restartPolicy: Never
-      serviceAccountName: omniroute-alias-sync
-      automountServiceAccountToken: true
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -117,6 +88,8 @@ spec:
             - name: aliases
               mountPath: /sync
               readOnly: true
+            - name: ownership-state
+              mountPath: /state
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -129,3 +102,6 @@ spec:
         - name: aliases
           configMap:
             name: omniroute-rr-alias-config
+        - name: ownership-state
+          persistentVolumeClaim:
+            claimName: omniroute-rr-alias-state

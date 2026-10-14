@@ -1,11 +1,11 @@
 // Flux-managed, one-shot reconciliation of OmniRoute routing aliases.
 // No sidecar, polling loop, runtime restarts, or third-party dependencies.
-import { readFileSync } from 'node:fs';
-import { request as httpsRequest } from 'node:https';
+import { readFileSync, writeFileSync, renameSync, unlinkSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 
 const desiredFile = process.env.OR_ALIASES_FILE || '/sync/aliases.json';
 const omnirouteUrl = (process.env.OR_BASE_URL || 'http://omniroute.llm-runtime.svc.cluster.local:20128').replace(/\/$/, '');
-const stateName = 'omniroute-rr-alias-state';
+const stateFile = process.env.OR_ALIAS_STATE_FILE || '/state/state.json';
 const requiredRoles = ['coder', 'planner', 'reviewer', 'enricher', 'failure-analyst', 'materializer'];
 // One-time migration allowance for earlier llm-runtime Settings aliases. These
 // are NOT desired-state defaults and never create or overwrite mappings.
@@ -79,41 +79,43 @@ async function api(method, path, body, token) {
   throw new Error(`OmniRoute ${method} ${path}: retries exhausted`);
 }
 
-// The state ConfigMap is created by Flux. Only get/patch on this named object
-// is granted to this Job; no namespace-wide ConfigMap mutation privileges.
-async function kube(method, body) {
-  const sa = '/var/run/secrets/kubernetes.io/serviceaccount';
-  const bearer = (process.env.OR_KUBE_TOKEN || readFileSync(`${sa}/token`, 'utf8')).trim();
-  const ca = process.env.OR_KUBE_CA || readFileSync(`${sa}/ca.crt`, 'utf8');
-  const namespace = (process.env.OR_KUBE_NAMESPACE || readFileSync(`${sa}/namespace`, 'utf8')).trim();
-  const path = `/api/v1/namespaces/${encodeURIComponent(namespace)}/configmaps/${stateName}`;
-  const options = {
-    hostname: process.env.KUBERNETES_SERVICE_HOST || 'kubernetes.default.svc',
-    port: Number(process.env.KUBERNETES_SERVICE_PORT_HTTPS || 443),
-    method, path, ca,
-    headers: {
-      authorization: `Bearer ${bearer}`,
-      accept: 'application/json',
-      ...(body === undefined ? {} : { 'content-type': 'application/merge-patch+json' }),
-    },
-    timeout: 15000,
+// Durable ownership state, written atomically on the dedicated PVC. Neither a
+// ServiceAccount token nor network access to the Kubernetes API is required.
+// The digest plays the role of the former ConfigMap resourceVersion.
+export function readStateFromDisk(file = stateFile) {
+  let raw;
+  try {
+    raw = readFileSync(file, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    raw = null;
+  }
+  if (raw !== null) validateState(raw); // corrupted state must fail closed
+  return {
+    metadata: { resourceVersion: createHash('sha256').update(raw ?? '').digest('hex') },
+    data: raw === null ? {} : { 'state.json': raw },
   };
-  return new Promise((resolve, reject) => {
-    const req = httpsRequest(options, res => {
-      let response = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { response += chunk; if (response.length > 1024 * 1024) req.destroy(new Error('Kubernetes response too large')); });
-      res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`Kubernetes ${method} ${path}: HTTP ${res.statusCode}`)); return;
-        }
-        try { resolve(JSON.parse(response)); } catch { reject(new Error('Invalid Kubernetes JSON')); }
-      });
-    });
-    req.on('timeout', () => req.destroy(new Error('Kubernetes request timeout')));
-    req.on('error', reject);
-    req.end(body === undefined ? undefined : JSON.stringify(body));
-  });
+}
+
+export async function writeStateToDisk(method, body, file = stateFile) {
+  if (method !== 'PATCH' || typeof body?.data?.['state.json'] !== 'string') {
+    throw new Error('Invalid alias ownership state update');
+  }
+  const current = readStateFromDisk(file);
+  if (body.metadata?.resourceVersion !== current.metadata.resourceVersion) {
+    throw new Error('Alias ownership state changed concurrently');
+  }
+  const content = body.data['state.json'];
+  validateState(content);
+  const tempFile = `${file}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(tempFile, content, { mode: 0o600, flag: 'wx' });
+    renameSync(tempFile, file);
+  } catch (error) {
+    try { unlinkSync(tempFile); } catch { /* may not have been created */ }
+    throw error;
+  }
+  return readStateFromDisk(file);
 }
 
 function validateState(input) {
@@ -206,7 +208,7 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
       throw new Error(`Previously managed alias remains: ${name}`);
     }
   }
-  // Using the state resourceVersion protects against concurrent writers.
+  // A digest-based compare before the atomic rename detects stale state.
   await k8s('PATCH', {
     metadata: { resourceVersion: state.metadata.resourceVersion },
     data: { 'state.json': JSON.stringify({ version: 1, aliases: desired }) },
@@ -219,9 +221,9 @@ if (process.argv[1]?.endsWith('/alias-reconcile.mjs')) {
   try {
     const raw = JSON.parse(readFileSync(desiredFile, 'utf8'));
     const desired = validateDesired(raw);
-    const initial = await kube('GET');
+    const initial = readStateFromDisk();
     const managementToken = await getManagementToken();
-    const result = await reconcile({ desired, state: initial, managementToken });
+    const result = await reconcile({ desired, state: initial, managementToken, k8s: writeStateToDisk });
     console.log(`OmniRoute Flux aliases reconciled: desired=${result.desired} updated=${result.updated} deleted=${result.deleted}`);
   } catch (error) {
     // Never print tokens, passwords or raw upstream error bodies.
