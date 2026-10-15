@@ -32,9 +32,9 @@ export OR_REQUEST_TIMEOUT_MS
 : "${OR_GLM_MODEL:=glm-5.3}"
 : "${OR_GLM_KEY_ENV:=ZAI_API_KEY}"
 
-: "${OR_OPENCODE_PROVIDER:=opencode-zen}"
-: "${OR_OPENCODE_NAME:=llm-runtime OpenCode Zen}"
-: "${OR_OPENCODE_MODEL:=big-pickle}"
+: "${OR_OPENCODE_PROVIDER:=opencode-go}"
+: "${OR_OPENCODE_NAME:=llm-runtime OpenCode Go}"
+: "${OR_OPENCODE_MODEL:=kimi-k2.7-code}"
 : "${OR_OPENCODE_KEY_ENV:=OPENCODE_API_KEY}"
 
 # Aliases are applied through OmniRoute's own settings endpoint.
@@ -81,14 +81,17 @@ step() {
 step codex-oauth helper import-oauth "$OR_CODEX_PROVIDER" "$OR_CODEX_NAME" "$OR_CODEX_AUTH_FILE" "$OR_CODEX_IMPORT_ENDPOINT"
 step agy-oauth helper import-oauth "$OR_AGY_PROVIDER" "$OR_AGY_NAME" "$OR_AGY_AUTH_FILE" "$OR_AGY_IMPORT_ENDPOINT"
 step glm upsert_key_provider "$OR_GLM_PROVIDER" "$OR_GLM_NAME" "$OR_GLM_MODEL" "$OR_GLM_KEY_ENV"
-step opencode-zen upsert_key_provider "$OR_OPENCODE_PROVIDER" "$OR_OPENCODE_NAME" "$OR_OPENCODE_MODEL" "$OR_OPENCODE_KEY_ENV"
+step opencode-go upsert_key_provider "$OR_OPENCODE_PROVIDER" "$OR_OPENCODE_NAME" "$OR_OPENCODE_MODEL" "$OR_OPENCODE_KEY_ENV"
 
 # Import success and model availability are different. Require each native
 # connection to exist and be enabled before reporting startup success.
 step check-codex helper verify-provider "$OR_CODEX_PROVIDER"
 step check-antigravity helper verify-provider "$OR_AGY_PROVIDER"
 step check-glm helper verify-provider "$OR_GLM_PROVIDER"
-step check-opencode-zen helper verify-provider "$OR_OPENCODE_PROVIDER"
+step check-opencode-go helper verify-provider "$OR_OPENCODE_PROVIDER"
+# Prompt-cache affinity overrides round-robin startIndex even with session stickiness off.
+# This is a global OmniRoute setting: strict Combo rotation requires it to be disabled.
+step routing-affinity helper disable-prompt-cache-affinity
 
 step alias-codex helper alias "$OR_CODEX_ALIAS" "$OR_CODEX_TARGET"
 step alias-gemini-pro helper alias "$OR_GEMINI_PRO_ALIAS" "$OR_GEMINI_PRO_TARGET"

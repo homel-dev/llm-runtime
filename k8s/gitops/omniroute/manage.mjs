@@ -160,6 +160,18 @@ async function main() {
       console.log(`omniroute-config: routing alias ${from} -> ${to}`);
       return;
     }
+    case 'disable-prompt-cache-affinity': {
+      const settings = await api('GET', '/api/settings');
+      if (settings?.promptCacheAffinityEnabled !== false) {
+        await api('PATCH', '/api/settings', { promptCacheAffinityEnabled: false });
+        const confirmed = await api('GET', '/api/settings');
+        if (confirmed?.promptCacheAffinityEnabled !== false) {
+          throw new Error('Prompt-cache affinity disable was not persisted');
+        }
+      }
+      console.log('omniroute-config: prompt-cache affinity disabled');
+      return;
+    }
     case 'verify-provider': {
       const [provider] = args;
       if (!provider) throw new Error('verify-provider requires a provider ID');

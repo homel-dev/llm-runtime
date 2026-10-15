@@ -9,7 +9,7 @@ combos:
     models:
       - cx/gpt-5.6-terra-high
       - glm/glm-5.3-low
-      - opencode-zen/deepseek-v4-pro
+      - opencode-go/deepseek-v4-pro
   - name: Hodor Group Front
     strategy: round-robin
     config:
@@ -19,13 +19,13 @@ combos:
     models:
       - cx/gpt-5.6-terra-max
       - glm/glm-5.3-flash
-      - opencode-zen/kimi-k2.7-code
+      - opencode-go/kimi-k2.7-code
   - name: Hodor Group Front Plus
     strategy: round-robin
     models:
       - cx/gpt-5.6-sol-xhigh
       - glm/glm-5.3-max
-      - opencode-zen/kimi-k3
+      - opencode-go/kimi-k3
   - name: Hodor AGY Strong
     strategy: priority
     models:
