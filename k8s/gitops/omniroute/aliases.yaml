@@ -25,7 +25,7 @@ combos:
   - name: Hodor AGY Strong
     strategy: priority
     models:
-      - agy/gemini-3.7-flash-low
+      - agy/gemini-3.1-flash-lite
   - name: Hodor AGY Front
     strategy: priority
     models:
