@@ -33,7 +33,8 @@ function comboModels(combo) {
 }
 function matchesCombo(current, desired) {
   return current.strategy === desired.strategy &&
-    JSON.stringify(comboModels(current)) === JSON.stringify(desired.models);
+    JSON.stringify(comboModels(current)) === JSON.stringify(desired.models) &&
+    (!desired.config || Object.entries(desired.config).every(([key, value]) => current.config?.[key] === value));
 }
 // Direct aliases from the currently deployed alias-sync. These are retired,
 // not recreated: OmniRoute Combo mappings become the only RR role routes.
@@ -77,7 +78,9 @@ export function validateDesired(raw) {
         names.has(combo.name) || !['priority', 'round-robin'].includes(combo.strategy) ||
         !Array.isArray(combo.models) || combo.models.length === 0 ||
         combo.models.some(model => typeof model !== 'string' || !/^[^\s/]+\/.+$/.test(model)) ||
-        Object.keys(combo).some(key => !['name', 'strategy', 'models'].includes(key))) {
+        Object.keys(combo).some(key => !['name', 'strategy', 'models',
+          ...(combo.name === 'Hodor Group Front' ? ['config'] : [])].includes(key)) ||
+        (combo.config !== undefined && !record(combo.config))) {
       throw new Error(`Invalid or duplicate Combo: ${combo?.name}`);
     }
     names.add(combo.name);
@@ -288,7 +291,9 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
     if (existing) {
       if (!matchesCombo(existing, spec)) {
         const updated = await omni('PUT', `/api/combos/${encodeURIComponent(existing.id)}`,
-          { models: spec.models, strategy: spec.strategy }, managementToken);
+          { models: spec.models, strategy: spec.strategy,
+            ...(spec.config ? { config: { ...(record(existing.config) ? existing.config : {}), ...spec.config } } : {}),
+          }, managementToken);
         if (updated?.name !== spec.name || updated.id !== existing.id) {
           throw new Error(`Unexpected Combo update result: ${spec.name}`);
         }

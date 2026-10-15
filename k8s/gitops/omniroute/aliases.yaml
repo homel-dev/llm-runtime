@@ -12,6 +12,10 @@ combos:
       - opencode-zen/deepseek-v4-pro
   - name: Hodor Group Front
     strategy: round-robin
+    config:
+      stickyRoundRobinLimit: 1
+      disableSessionStickiness: true
+      maxRetries: 0
     models:
       - cx/gpt-5.6-terra-max
       - glm/glm-5.3-flash
