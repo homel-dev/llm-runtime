@@ -1,0 +1,9 @@
+{
+  "name": "rr-omniroute-alias-sync",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "dependencies": {
+    "js-yaml": "5.4.1"
+  }
+}

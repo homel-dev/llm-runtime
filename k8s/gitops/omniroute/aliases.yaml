@@ -1,0 +1,39 @@
+version: 1
+combos:
+  - name: Hodor Local Weak
+    strategy: priority
+    models:
+      - vllm/Qwen3-32B-AWQ
+  - name: Hodor Group Strong
+    strategy: round-robin
+    models:
+      - cx/gpt-5.6-terra-high
+      - glm/glm-5.3-low
+      - opencode-zen/deepseek-v4-pro
+  - name: Hodor Group Front
+    strategy: round-robin
+    models:
+      - cx/gpt-5.6-terra-max
+      - glm/glm-5.3-flash
+      - opencode-zen/kimi-k2.7-code
+  - name: Hodor Group Front Plus
+    strategy: round-robin
+    models:
+      - cx/gpt-5.6-sol-xhigh
+      - glm/glm-5.3-max
+      - opencode-zen/kimi-k3
+  - name: Hodor AGY Strong
+    strategy: priority
+    models:
+      - agy/gemini-3.7-flash-low
+  - name: Hodor AGY Front
+    strategy: priority
+    models:
+      - agy/gemini-3.7-flash-high
+mappings:
+  hodor-local-weak: Hodor Local Weak
+  hodor-group-strong: Hodor Group Strong
+  hodor-group-front: Hodor Group Front
+  hodor-group-front-plus: Hodor Group Front Plus
+  hodor-agy-strong: Hodor AGY Strong
+  hodor-agy-front: Hodor AGY Front

@@ -18,10 +18,10 @@ configMapGenerator:
       - manage-wrapper.mjs
   - name: omniroute-rr-alias-config
     files:
-      - aliases.json
+      - aliases.yaml
       - alias-reconcile.mjs
 # Keep the existing native provider startup but delegate all routing aliases to
-# the declarative Flux Job. JSON changes affect only the Job pod template.
+# the declarative Flux Job. YAML changes affect only the Job pod template.
 patches:
   - target:
       group: apps

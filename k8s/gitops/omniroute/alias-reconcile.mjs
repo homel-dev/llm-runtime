@@ -1,15 +1,40 @@
 // Flux-managed, one-shot migration from direct RR aliases to Combo routing.
-// No sidecar, polling loop, runtime restarts, or third-party dependencies.
+// No sidecar, polling loop, or runtime restarts.
 import { readFileSync, writeFileSync, renameSync, unlinkSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
+import yaml from 'js-yaml';
 
-const desiredFile = process.env.OR_ALIASES_FILE || '/sync/aliases.json';
+const desiredFile = process.env.OR_ALIASES_FILE || '/opt/alias-sync/config/aliases.yaml';
 const omnirouteUrl = (process.env.OR_BASE_URL || 'http://omniroute.llm-runtime.svc.cluster.local:20128').replace(/\/$/, '');
 const stateFile = process.env.OR_ALIAS_STATE_FILE || '/state/state.json';
-const requiredCombos = {
-  coder: 'Coder', planner: 'Planner', reviewer: 'Reviewer', enricher: 'Enricher',
-  'hodor-weak': 'Hodor Weak', 'hodor-strong': 'Hodor Strong', 'hodor-front': 'Hodor Front',
-};
+const requiredCombos = Object.freeze({
+  'hodor-local-weak': 'Hodor Local Weak',
+  'hodor-group-strong': 'Hodor Group Strong',
+  'hodor-group-front': 'Hodor Group Front',
+  'hodor-group-front-plus': 'Hodor Group Front Plus',
+  'hodor-agy-strong': 'Hodor AGY Strong',
+  'hodor-agy-front': 'Hodor AGY Front',
+});
+const retiredMappings = new Set([
+  'coder', 'planner', 'reviewer', 'enricher', 'materializer', 'failure-analyst',
+  'hodor-weak', 'hodor-strong', 'hodor-front', 'hodor-front-plus',
+]);
+const retiredCombos = new Set([
+  'Coder', 'Planner', 'Reviewer', 'Enricher', 'Materializer',
+  'Hodor Weak', 'Hodor Strong', 'Hodor Front', 'Hodor Front Plus',
+]);
+function comboModels(combo) {
+  return combo.models.map(model => {
+    if (typeof model === 'string') return model;
+    if (!record(model) || typeof model.model !== 'string') return null;
+    return model.model.includes('/') ? model.model :
+      typeof model.providerId === 'string' ? `${model.providerId}/${model.model}` : model.model;
+  });
+}
+function matchesCombo(current, desired) {
+  return current.strategy === desired.strategy &&
+    JSON.stringify(comboModels(current)) === JSON.stringify(desired.models);
+}
 // Direct aliases from the currently deployed alias-sync. These are retired,
 // not recreated: OmniRoute Combo mappings become the only RR role routes.
 // An alias with an unexpected target fails closed rather than being destroyed.
@@ -43,14 +68,14 @@ export function validateDesired(raw) {
   if (!record(raw) || raw.version !== 1 ||
       !Array.isArray(raw.combos) || !record(raw.mappings) ||
       Object.keys(raw).some(key => !['version', 'combos', 'mappings'].includes(key))) {
-    throw new Error('aliases.json requires version=1, combos and mappings only');
+    throw new Error('aliases.yaml requires version=1, combos and mappings only');
   }
   const names = new Set();
   for (const combo of raw.combos) {
     if (!record(combo) || typeof combo.name !== 'string' ||
         !/^[a-zA-Z0-9][a-zA-Z0-9_. -]{0,99}$/.test(combo.name) ||
-        names.has(combo.name) || combo.strategy !== 'priority' ||
-        !Array.isArray(combo.models) ||
+        names.has(combo.name) || !['priority', 'round-robin'].includes(combo.strategy) ||
+        !Array.isArray(combo.models) || combo.models.length === 0 ||
         combo.models.some(model => typeof model !== 'string' || !/^[^\s/]+\/.+$/.test(model)) ||
         Object.keys(combo).some(key => !['name', 'strategy', 'models'].includes(key))) {
       throw new Error(`Invalid or duplicate Combo: ${combo?.name}`);
@@ -59,7 +84,7 @@ export function validateDesired(raw) {
   }
   const expected = Object.entries(requiredCombos);
   if (names.size !== expected.length || Object.keys(raw.mappings).length !== expected.length) {
-    throw new Error('Expected exactly seven separate RR Combos and mappings');
+    throw new Error('Expected exactly six Hodor Combos and mappings');
   }
   for (const [role, comboName] of expected) {
     if (!names.has(comboName) || raw.mappings[role] !== comboName) {
@@ -246,7 +271,7 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
     if (existing && (!existing.id || !Array.isArray(existing.models))) {
       throw new Error(`Invalid existing Combo: ${desiredCombo.name}`);
     }
-    // An existing Combo with the same name is user-managed; do not touch its members.
+    // The six named Hodor Combos are owned by this GitOps document.
   }
   for (const [role, name] of Object.entries(config.mappings)) {
     const existing = mappings.get(role);
@@ -259,7 +284,18 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
   // Build the replacement route before removing the old direct aliases.
   let createdCombos = 0, createdMappings = 0, deleted = 0;
   for (const spec of config.combos) {
-    if (combos.has(spec.name)) continue;
+    const existing = combos.get(spec.name);
+    if (existing) {
+      if (!matchesCombo(existing, spec)) {
+        const updated = await omni('PUT', `/api/combos/${encodeURIComponent(existing.id)}`,
+          { models: spec.models, strategy: spec.strategy }, managementToken);
+        if (updated?.name !== spec.name || updated.id !== existing.id) {
+          throw new Error(`Unexpected Combo update result: ${spec.name}`);
+        }
+        combos.set(spec.name, updated);
+      }
+      continue;
+    }
     const created = await omni('POST', '/api/combos', spec, managementToken);
     if (created?.name !== spec.name || typeof created.id !== 'string') {
       throw new Error(`Unexpected Combo creation result: ${spec.name}`);
@@ -287,6 +323,20 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
     }
   }
 
+  // Remove the old RR role-to-Combo routes. Internal RR flow roles do not
+  // exist as independent OmniRoute aliases or Combo mappings.
+  for (const name of retiredMappings) {
+    const mapping = mappings.get(name);
+    if (mapping) await omni('DELETE', `/api/model-combo-mappings/${encodeURIComponent(mapping.id)}`,
+      undefined, managementToken);
+  }
+  // Delete only the previous RR-owned Combo names, after unlinking mappings.
+  for (const name of retiredCombos) {
+    const combo = combos.get(name);
+    if (combo) await omni('DELETE', `/api/combos/${encodeURIComponent(combo.id)}`,
+      undefined, managementToken);
+  }
+
   // Actual cleanup of old direct aliases; no shadow routing or duplicate aliases.
   for (const name of obsolete) {
     if (own(active, name)) {
@@ -311,6 +361,17 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
   }
   const groups = new Map(confirmedCombos.map(group => [group.name, group]));
   const bindings = new Map(confirmedMappings.map(mapping => [mapping.pattern, mapping]));
+  for (const name of retiredMappings) {
+    if (bindings.has(name)) throw new Error(`Retired RR mapping remains: ${name}`);
+  }
+  for (const name of retiredCombos) {
+    if (groups.has(name)) throw new Error(`Retired RR Combo remains: ${name}`);
+  }
+  for (const spec of config.combos) {
+    if (!matchesCombo(groups.get(spec.name) || { models: [] }, spec)) {
+      throw new Error(`Hodor Combo drift: ${spec.name}`);
+    }
+  }
   for (const [role, name] of Object.entries(config.mappings)) {
     const group = groups.get(name), mapping = bindings.get(role);
     if (!group || typeof group.id !== 'string' ||
@@ -329,7 +390,7 @@ export async function reconcile({ desired, state, managementToken, omni = api, k
 // This entrypoint is inert when imported by the native Node test suite.
 if (process.argv[1]?.endsWith('/alias-reconcile.mjs')) {
   try {
-    const raw = JSON.parse(readFileSync(desiredFile, 'utf8'));
+    const raw = yaml.load(readFileSync(desiredFile, 'utf8'), { json: false });
     const desired = validateDesired(raw);
     const initial = readStateFromDisk();
     const managementToken = await getManagementToken();

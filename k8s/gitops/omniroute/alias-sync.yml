@@ -61,6 +61,8 @@ spec:
       labels:
         app.kubernetes.io/name: omniroute-alias-sync
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       restartPolicy: Never
       automountServiceAccountToken: false
       securityContext:
@@ -73,9 +75,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: sync
-          image: docker.io/library/node:22.16.0-alpine3.22
+          image: ghcr.io/homel-dev/llm-runtime-omniroute-alias-sync:main
           imagePullPolicy: IfNotPresent
-          command: [node, /sync/alias-reconcile.mjs]
+          command: [node, /opt/alias-sync/config/alias-reconcile.mjs]
           env:
             - name: OR_BASE_URL
               value: http://omniroute.llm-runtime.svc.cluster.local:20128
@@ -86,7 +88,7 @@ spec:
                   key: token
           volumeMounts:
             - name: aliases
-              mountPath: /sync
+              mountPath: /opt/alias-sync/config
               readOnly: true
             - name: ownership-state
               mountPath: /state
