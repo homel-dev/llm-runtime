@@ -15,6 +15,12 @@ spec:
               kubernetes.io/metadata.name: rr
           podSelector:
             matchLabels:
+              app.kubernetes.io/name: rr-omniroute-operator
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rr
+          podSelector:
+            matchLabels:
               app.kubernetes.io/name: rr-pi-agent
         - namespaceSelector:
             matchLabels:
