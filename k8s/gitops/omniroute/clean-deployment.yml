@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omniroute
+  namespace: llm-runtime
+spec:
+  template:
+    spec:
+      containers:
+        - name: omniroute
+          # Retain the working shell entrypoint convention; start the server
+          # WITHOUT legacy background startup.sh provider/alias reconciliation.
+          args:
+            - /bin/sh
+            - -c
+            - exec node dev/run-standalone.mjs
+          env:
+            - name: OR_BASE_URL
+              $patch: delete
+            - name: OR_WAIT_SECONDS
+              $patch: delete
+            - name: OR_LOG_TO_PID1
+              $patch: delete
+            - name: OR_MANAGEMENT_TOKEN
+              $patch: delete
+            - name: ZAI_API_KEY
+              $patch: delete
+            - name: OPENCODE_API_KEY
+              $patch: delete
+          volumeMounts:
+            - name: startup-script
+              $patch: delete
+            - name: codex-auth
+              $patch: delete
+            - name: agy-auth
+              $patch: delete
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: omniroute-data-rr-v1
+        - name: startup-script
+          $patch: delete
+        - name: codex-auth
+          $patch: delete
+        - name: agy-auth
+          $patch: delete

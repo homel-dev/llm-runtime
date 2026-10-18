@@ -1,0 +1,13 @@
+# One-time clean cutover. Old llm-runtime/omniroute-data is NOT deleted.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: omniroute-data-rr-v1
+  namespace: llm-runtime
+  annotations:
+    kustomize.toolkit.fluxcd.io/prune: Disabled
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi

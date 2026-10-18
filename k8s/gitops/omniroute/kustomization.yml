@@ -1,48 +1,47 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: llm-runtime
+# Do not use top-level namespace: Roles and RoleBindings also target rr.
 resources:
   - ../../omniroute
   - bootstrap.yml
-  - alias-sync.yml
+  - fresh-pvc.yml
+  - operator-token-bootstrap.yml
+  - credential-mirror.yml
 configMapGenerator:
   - name: omniroute-bootstrap-script
+    namespace: llm-runtime
     options:
       disableNameSuffixHash: true
     files:
       - bootstrap.py
-  - name: omniroute-startup-script
+  - name: omniroute-token-bootstrap-script
+    namespace: llm-runtime
     files:
-      - startup.sh
-      - manage.mjs
-      - manage-wrapper.mjs
-  - name: omniroute-rr-alias-config
+      - operator-token-bootstrap.sh
+  - name: omniroute-credential-mirror-script
+    namespace: llm-runtime
     files:
-      - aliases.yaml
-      - alias-reconcile.mjs
-# Keep the existing native provider startup but delegate all routing aliases to
-# the declarative Flux Job. YAML changes affect only the Job pod template.
+      - credential-mirror.py
 patches:
+  - path: clean-deployment.yml
   - target:
-      group: apps
-      version: v1
-      kind: Deployment
+      kind: NetworkPolicy
       name: omniroute
+      namespace: llm-runtime
     patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: omniroute
-      spec:
-        template:
-          spec:
-            containers:
-              - name: omniroute
-                env:
-                  - name: OR_MANAGE_SCRIPT
-                    value: /etc/omniroute-startup/manage-wrapper.mjs
-generatorOptions:
-  disableNameSuffixHash: false
+      - op: add
+        path: /spec/ingress/-
+        value:
+          from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: rr
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: rr-omniroute-api-key-bootstrap
+          ports:
+            - protocol: TCP
+              port: 20128
 images:
   - name: omniroute
     newName: docker.io/diegosouzapw/omniroute

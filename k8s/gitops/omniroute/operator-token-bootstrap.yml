@@ -1,0 +1,121 @@
+# This ServiceAccount is the only identity allowed to create the initial
+# rr/omniroute-operator-token. No RBAC is granted to the OmniRoute application.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: omniroute-token-bootstrap
+  namespace: llm-runtime
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: omniroute-token-bootstrap-exec
+  namespace: llm-runtime
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [omniroute]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omniroute-token-bootstrap-exec
+  namespace: llm-runtime
+subjects:
+  - kind: ServiceAccount
+    name: omniroute-token-bootstrap
+    namespace: llm-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: omniroute-token-bootstrap-exec
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: omniroute-token-bootstrap-secret
+  namespace: rr
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [omniroute-operator-token]
+    verbs: [get, patch]
+  # Kubernetes does not enforce resourceNames for create: this SA may create
+  # another Secret in rr. Keep this identity exclusive to the one-shot Job.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: omniroute-token-bootstrap-secret
+  namespace: rr
+subjects:
+  - kind: ServiceAccount
+    name: omniroute-token-bootstrap
+    namespace: llm-runtime
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: omniroute-token-bootstrap-secret
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: omniroute-token-bootstrap-v1
+  namespace: llm-runtime
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: omniroute-token-bootstrap
+    spec:
+      serviceAccountName: omniroute-token-bootstrap
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: docker.io/alpine/kubectl:1.34.1
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, /bootstrap/operator-token-bootstrap.sh]
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: script
+              mountPath: /bootstrap
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: { cpu: 25m, memory: 48Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+      volumes:
+        - name: script
+          configMap:
+            name: omniroute-token-bootstrap-script
+        - name: tmp
+          emptyDir: {}
