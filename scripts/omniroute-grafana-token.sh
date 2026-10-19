@@ -70,17 +70,25 @@ else
   verify_secret_token
 fi
 
-# Environment variables are a Grafana process snapshot: changed Secrets alone
-# do not update secureJsonData provisioned by a previous Grafana process.
-kubectl -n observability-console rollout restart deployment/grafana
-kubectl -n observability-console rollout status deployment/grafana --timeout=300s
-
-# Confirm Grafana actually got EXACTLY the Secret value, without exposing either.
+# Grafana receives this Secret as an environment variable. Only a changed token
+# requires a one-time restart; restarting on every invocation logs UI users out.
+# No PVC or new credential is necessary when the running token already matches.
 expected="$(kubectl -n observability-console get secret "$secret_name" \
   -o jsonpath='{.data.token}' | base64 -d | sha256sum | awk '{print $1}')"
+kubectl -n observability-console rollout status deployment/grafana --timeout=300s
 actual="$(kubectl -n observability-console exec deployment/grafana -c grafana -- \
   sh -ec 'test -n "$OMNIROUTE_GRAFANA_READ_TOKEN"; printf %s "$OMNIROUTE_GRAFANA_READ_TOKEN" | sha256sum' \
   | awk '{print $1}')"
+if [[ "$expected" != "$actual" ]]; then
+  echo 'Grafana token changed; restarting once to load the new Secret.'
+  kubectl -n observability-console rollout restart deployment/grafana
+  kubectl -n observability-console rollout status deployment/grafana --timeout=300s
+  actual="$(kubectl -n observability-console exec deployment/grafana -c grafana -- \
+    sh -ec 'test -n "$OMNIROUTE_GRAFANA_READ_TOKEN"; printf %s "$OMNIROUTE_GRAFANA_READ_TOKEN" | sha256sum' \
+    | awk '{print $1}')"
+else
+  echo 'Grafana already has the expected token; no restart.'
+fi
 if [[ "$expected" != "$actual" ]]; then
   echo 'FAIL: Grafana environment and OmniRoute token Secret disagree.' >&2
   exit 1
