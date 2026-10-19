@@ -10,15 +10,14 @@ data:
   llm-runtime-omniroute-admiral.json: |
     {
       "uid": "llm-runtime-omniroute-admiral",
-      "title": "LLM Runtime / OmniRoute · Admiral",
+      "title": "LLM Runtime / OmniRoute · Provider & Model Distribution",
       "description": "Provider and alias-to-final-model distribution from OmniRoute call logs. Provider charts are lifetime; alias charts are last 1,000 matching real call logs per alias and do not show inactive models. No intermediate Combo nodes.",
       "schemaVersion": 39,
-      "version": 1,
+      "version": 2,
       "id": null,
       "tags": [
         "llm-runtime",
         "omniroute",
-        "admiral",
         "routing",
         "providers",
         "outcomes"
@@ -63,12 +62,12 @@ data:
                 "type": "json",
                 "format": "table",
                 "source": "url",
-                "parser": "backend",
+                "parser": "jq-backend",
                 "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/model-combo-mappings?limit=200&offset=0",
                 "url_options": {
                   "method": "GET"
                 },
-                "root_selector": ".mappings[] | select(.enabled == true) | {__text: .pattern, __value: .pattern}",
+                "root_selector": ".mappings[] | select(.enabled != false and (.pattern | type == \"string\")) | {__text: .pattern, __value: .pattern}",
                 "columns": [
                   {
                     "selector": "__text",
