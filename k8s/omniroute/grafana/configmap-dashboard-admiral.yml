@@ -11,9 +11,9 @@ data:
     {
       "uid": "llm-runtime-omniroute-admiral",
       "title": "LLM Runtime / OmniRoute · Provider & Model Distribution",
-      "description": "Provider and alias-to-final-model distribution from OmniRoute call logs. Provider charts are lifetime; alias charts are last 1,000 matching real call logs per alias and do not show inactive models. No intermediate Combo nodes.",
+      "description": "Provider-wide lifetime counts, latency and token volume; mapped aliases resolved by Combo UUID. Per-alias final model success/failure and recorded total tokens over 30 days. Configured leaf models visible at zero usage; intermediate Combos omitted. Alias panel time range fixed to 30d.",
       "schemaVersion": 39,
-      "version": 2,
+      "version": 4,
       "id": null,
       "tags": [
         "llm-runtime",
@@ -53,7 +53,7 @@ data:
               "type": "yesoreyeram-infinity-datasource",
               "uid": "omniroute-api"
             },
-            "definition": "Infinity: enabled OmniRoute model-combo mappings",
+            "definition": "Infinity: enabled model-combo mappings (alias label, stable combo UUID value)",
             "query": {
               "queryType": "infinity",
               "query": "",
@@ -67,7 +67,7 @@ data:
                 "url_options": {
                   "method": "GET"
                 },
-                "root_selector": ".mappings[] | select(.enabled != false and (.pattern | type == \"string\")) | {__text: .pattern, __value: .pattern}",
+                "root_selector": ".mappings[] | select(.enabled != false and (.pattern | type == \"string\") and (.comboId | type == \"string\")) | {__text: .pattern, __value: .comboId}",
                 "columns": [
                   {
                     "selector": "__text",
@@ -365,8 +365,8 @@ data:
         {
           "id": 4,
           "type": "barchart",
-          "title": "${alias} · final models · successful / failed",
-          "description": "Actual leaf model from call logs (no intermediate Combo rows). Last 1,000 real provider calls matching this requested alias; inactive calls and test probes excluded. Shows only models with observed calls. Not Grafana time-filtered.",
+          "title": "${alias:text} · final models · successful / failed (30d)",
+          "description": "Final leaf models for the mapped Combo (including configured models with zero calls). Counts in the last 30d; successful/failed split estimated from per-target successRate (rounded by OmniRoute). Includes nested Combo targets. Not tied to Grafana time picker.",
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "omniroute-api"
@@ -388,11 +388,11 @@ data:
               "format": "table",
               "source": "url",
               "parser": "jq-backend",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=1000&excludeTests=1&model=${alias:percentencode}",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/combo-health?range=30d&comboId=${alias:raw}",
               "url_options": {
                 "method": "GET"
               },
-              "root_selector": "[.[] | select(.requestedModel == \"${alias:raw}\" and .active != true and .model != null and .model != \"\" and ((.status // 0) >= 200 or (.error // \"\") != \"\"))] | group_by(.model) | map({model: .[0].model, success: ([.[] | select((.status // 0) >= 200 and (.status // 0) < 400 and (.error // \"\") == \"\")] | length), failure: ([.[] | select((.status // 0) >= 400 or (.error // \"\") != \"\")] | length)}) | sort_by(-(.success + .failure))[]",
+              "root_selector": "[.combos[].targetHealth[]? | select(.model != null and .model != \"\") | {model: .model, requests: (.requests // 0), success: (((.requests // 0) * (.successRate // 0) / 100) | round)}] | group_by(.model) | map({model: .[0].model, success: (map(.success) | add // 0), failure: (map(.requests - .success) | add // 0)}) | sort_by(-(.success + .failure))[]",
               "columns": [
                 {
                   "selector": "model",
@@ -416,7 +416,7 @@ data:
             "orientation": "horizontal",
             "xField": "model",
             "stacking": "normal",
-            "showValue": "auto",
+            "showValue": "always",
             "barWidth": 0.85,
             "groupWidth": 0.7,
             "barRadius": 0,
@@ -480,8 +480,8 @@ data:
         {
           "id": 5,
           "type": "barchart",
-          "title": "${alias} · final models · tokens",
-          "description": "Input/output tokens by actual leaf model, from the last 1,000 matching real provider calls. Missing counts are zero. Not Grafana time-filtered.",
+          "title": "${alias:text} · final models · tokens (30d)",
+          "description": "Recorded input+output token volume per configured final leaf model, 30d, using OmniRoute combo forecast historical aggregates. Models with zero recorded tokens are included. Total tokens (not separate input/output); no intermediate Combo nodes.",
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
             "uid": "omniroute-api"
@@ -503,11 +503,11 @@ data:
               "format": "table",
               "source": "url",
               "parser": "jq-backend",
-              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=1000&excludeTests=1&model=${alias:percentencode}",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/combo-forecast?range=30d&horizon=30d&comboId=${alias:raw}",
               "url_options": {
                 "method": "GET"
               },
-              "root_selector": "[.[] | select(.requestedModel == \"${alias:raw}\" and .active != true and .model != null and .model != \"\" and ((.status // 0) >= 200 or (.error // \"\") != \"\"))] | group_by(.model) | map({model: .[0].model, input: ([.[].tokens.in // 0] | add // 0), output: ([.[].tokens.out // 0] | add // 0)}) | sort_by(-(.input + .output))[]",
+              "root_selector": "[.combos[].targets[]? | select(.model != null and .model != \"\") | {model: .model, tokens: (.history.totalTokens // 0)}] | group_by(.model) | map({model: .[0].model, tokens: (map(.tokens) | add // 0)}) | sort_by(-.tokens)[]",
               "columns": [
                 {
                   "selector": "model",
@@ -515,13 +515,8 @@ data:
                   "type": "string"
                 },
                 {
-                  "selector": "input",
-                  "text": "Input tokens",
-                  "type": "number"
-                },
-                {
-                  "selector": "output",
-                  "text": "Output tokens",
+                  "selector": "tokens",
+                  "text": "Input + output tokens",
                   "type": "number"
                 }
               ]
@@ -531,7 +526,7 @@ data:
             "orientation": "horizontal",
             "xField": "model",
             "stacking": "normal",
-            "showValue": "auto",
+            "showValue": "always",
             "barWidth": 0.85,
             "groupWidth": 0.7,
             "barRadius": 0,
