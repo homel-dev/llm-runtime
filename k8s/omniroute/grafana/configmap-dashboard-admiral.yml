@@ -1,0 +1,566 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omniroute-grafana-admiral-dashboard
+  namespace: llm-runtime
+  labels:
+    grafana_dashboard: '1'
+    app.kubernetes.io/part-of: llm-runtime
+data:
+  llm-runtime-omniroute-admiral.json: |
+    {
+      "uid": "llm-runtime-omniroute-admiral",
+      "title": "LLM Runtime / OmniRoute · Admiral",
+      "description": "Provider and alias-to-final-model distribution from OmniRoute call logs. Provider charts are lifetime; alias charts are last 1,000 matching real call logs per alias and do not show inactive models. No intermediate Combo nodes.",
+      "schemaVersion": 39,
+      "version": 1,
+      "id": null,
+      "tags": [
+        "llm-runtime",
+        "omniroute",
+        "admiral",
+        "routing",
+        "providers",
+        "outcomes"
+      ],
+      "timezone": "browser",
+      "refresh": "1m",
+      "time": {
+        "from": "now-24h",
+        "to": "now"
+      },
+      "timepicker": {
+        "hidden": true
+      },
+      "editable": false,
+      "graphTooltip": 0,
+      "annotations": {
+        "list": []
+      },
+      "templating": {
+        "list": [
+          {
+            "name": "alias",
+            "label": "Route alias",
+            "type": "query",
+            "hide": 0,
+            "multi": true,
+            "includeAll": true,
+            "refresh": 1,
+            "sort": 1,
+            "skipUrlSync": false,
+            "regex": "",
+            "datasource": {
+              "type": "yesoreyeram-infinity-datasource",
+              "uid": "omniroute-api"
+            },
+            "definition": "Infinity: enabled OmniRoute model-combo mappings",
+            "query": {
+              "queryType": "infinity",
+              "query": "",
+              "infinityQuery": {
+                "refId": "variable",
+                "type": "json",
+                "format": "table",
+                "source": "url",
+                "parser": "backend",
+                "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/model-combo-mappings?limit=200&offset=0",
+                "url_options": {
+                  "method": "GET"
+                },
+                "root_selector": ".mappings[] | select(.enabled == true) | {__text: .pattern, __value: .pattern}",
+                "columns": [
+                  {
+                    "selector": "__text",
+                    "text": "__text",
+                    "type": "string"
+                  },
+                  {
+                    "selector": "__value",
+                    "text": "__value",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "current": {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            "options": []
+          }
+        ]
+      },
+      "links": [],
+      "panels": [
+        {
+          "id": 1,
+          "type": "barchart",
+          "title": "Providers · successful vs failed",
+          "description": "Lifetime counts from OmniRoute call_logs, grouped by actual provider. Failed includes all requests not counted as HTTP 2xx/3xx success.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 24,
+            "h": 11
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "omniroute-api"
+              },
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "parser": "jq-backend",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "root_selector": ".providers[] | select((.totalRequests // 0) > 0) | {provider:.provider, success:(.successfulRequests // 0), failed:((.totalRequests // 0)-(.successfulRequests // 0))}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "success",
+                  "text": "Successful",
+                  "type": "number"
+                },
+                {
+                  "selector": "failed",
+                  "text": "Failed / other",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "xField": "provider",
+            "stacking": "normal",
+            "showValue": "auto",
+            "barWidth": 0.85,
+            "groupWidth": 0.7,
+            "barRadius": 0,
+            "xTickLabelRotation": 0,
+            "xTickLabelSpacing": 0,
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Successful"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failed / other"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": 2,
+          "type": "barchart",
+          "title": "Providers · average latency",
+          "description": "Lifetime mean latency in milliseconds, across recorded provider requests; not p95.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 11,
+            "w": 12,
+            "h": 10
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "omniroute-api"
+              },
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "parser": "jq-backend",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "root_selector": ".providers[] | select(.avgLatencyMs != null) | {provider:.provider, latency:.avgLatencyMs}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "latency",
+                  "text": "Average latency (ms)",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "xField": "provider",
+            "stacking": "none",
+            "showValue": "auto",
+            "barWidth": 0.85,
+            "groupWidth": 0.7,
+            "barRadius": 0,
+            "xTickLabelRotation": 0,
+            "xTickLabelSpacing": 0,
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 3,
+          "type": "barchart",
+          "title": "Providers · token volume",
+          "description": "Lifetime input/output tokens from OmniRoute call_logs; attribution to final provider.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 11,
+            "w": 12,
+            "h": 10
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "omniroute-api"
+              },
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "parser": "jq-backend",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/provider-stats",
+              "url_options": {
+                "method": "GET"
+              },
+              "root_selector": ".providers[] | select((.totalRequests // 0) > 0) | {provider:.provider, input:(.totalTokensIn // 0), output:(.totalTokensOut // 0)}",
+              "columns": [
+                {
+                  "selector": "provider",
+                  "text": "Provider",
+                  "type": "string"
+                },
+                {
+                  "selector": "input",
+                  "text": "Input",
+                  "type": "number"
+                },
+                {
+                  "selector": "output",
+                  "text": "Output",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "xField": "provider",
+            "stacking": "normal",
+            "showValue": "auto",
+            "barWidth": 0.85,
+            "groupWidth": 0.7,
+            "barRadius": 0,
+            "xTickLabelRotation": 0,
+            "xTickLabelSpacing": 0,
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "id": 4,
+          "type": "barchart",
+          "title": "${alias} · final models · successful / failed",
+          "description": "Actual leaf model from call logs (no intermediate Combo rows). Last 1,000 real provider calls matching this requested alias; inactive calls and test probes excluded. Shows only models with observed calls. Not Grafana time-filtered.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 21,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "omniroute-api"
+              },
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "parser": "jq-backend",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=1000&excludeTests=1&model=${alias:percentencode}",
+              "url_options": {
+                "method": "GET"
+              },
+              "root_selector": "[.[] | select(.requestedModel == \"${alias:raw}\" and .active != true and .model != null and .model != \"\" and ((.status // 0) >= 200 or (.error // \"\") != \"\"))] | group_by(.model) | map({model: .[0].model, success: ([.[] | select((.status // 0) >= 200 and (.status // 0) < 400 and (.error // \"\") == \"\")] | length), failure: ([.[] | select((.status // 0) >= 400 or (.error // \"\") != \"\")] | length)}) | sort_by(-(.success + .failure))[]",
+              "columns": [
+                {
+                  "selector": "model",
+                  "text": "Final model",
+                  "type": "string"
+                },
+                {
+                  "selector": "success",
+                  "text": "Successful",
+                  "type": "number"
+                },
+                {
+                  "selector": "failure",
+                  "text": "Failed",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "xField": "model",
+            "stacking": "normal",
+            "showValue": "auto",
+            "barWidth": 0.85,
+            "groupWidth": 0.7,
+            "barRadius": 0,
+            "xTickLabelRotation": 0,
+            "xTickLabelSpacing": 0,
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Successful"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Failed"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "repeat": "alias",
+          "repeatDirection": "v",
+          "maxPerRow": 1
+        },
+        {
+          "id": 5,
+          "type": "barchart",
+          "title": "${alias} · final models · tokens",
+          "description": "Input/output tokens by actual leaf model, from the last 1,000 matching real provider calls. Missing counts are zero. Not Grafana time-filtered.",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "omniroute-api"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 29,
+            "w": 24,
+            "h": 8
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "yesoreyeram-infinity-datasource",
+                "uid": "omniroute-api"
+              },
+              "refId": "A",
+              "type": "json",
+              "format": "table",
+              "source": "url",
+              "parser": "jq-backend",
+              "url": "http://omniroute.llm-runtime.svc.cluster.local:20128/api/usage/call-logs?limit=1000&excludeTests=1&model=${alias:percentencode}",
+              "url_options": {
+                "method": "GET"
+              },
+              "root_selector": "[.[] | select(.requestedModel == \"${alias:raw}\" and .active != true and .model != null and .model != \"\" and ((.status // 0) >= 200 or (.error // \"\") != \"\"))] | group_by(.model) | map({model: .[0].model, input: ([.[].tokens.in // 0] | add // 0), output: ([.[].tokens.out // 0] | add // 0)}) | sort_by(-(.input + .output))[]",
+              "columns": [
+                {
+                  "selector": "model",
+                  "text": "Final model",
+                  "type": "string"
+                },
+                {
+                  "selector": "input",
+                  "text": "Input tokens",
+                  "type": "number"
+                },
+                {
+                  "selector": "output",
+                  "text": "Output tokens",
+                  "type": "number"
+                }
+              ]
+            }
+          ],
+          "options": {
+            "orientation": "horizontal",
+            "xField": "model",
+            "stacking": "normal",
+            "showValue": "auto",
+            "barWidth": 0.85,
+            "groupWidth": 0.7,
+            "barRadius": 0,
+            "xTickLabelRotation": 0,
+            "xTickLabelSpacing": 0,
+            "legend": {
+              "showLegend": true,
+              "displayMode": "list",
+              "placement": "bottom",
+              "calcs": []
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {
+                "mode": "palette-classic"
+              }
+            },
+            "overrides": []
+          },
+          "repeat": "alias",
+          "repeatDirection": "v",
+          "maxPerRow": 1
+        }
+      ]
+    }

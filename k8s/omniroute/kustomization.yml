@@ -11,6 +11,7 @@ resources:
   - networkpolicy.yml
   - grafana/configmap-datasource.yml
   - grafana/configmap-dashboard.yml
+  - grafana/configmap-dashboard-admiral.yml
   - grafana/rbac.yml
 
 patches:
