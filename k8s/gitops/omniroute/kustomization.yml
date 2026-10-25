@@ -45,4 +45,4 @@ patches:
 images:
   - name: omniroute
     newName: docker.io/diegosouzapw/omniroute
-    newTag: 3.8.53
+    newTag: 3.8.52
