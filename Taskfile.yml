@@ -27,7 +27,7 @@ tasks:
   miniup:
     desc: Start minikube
     cmds:
-      - minikube start --driver=docker --cpus=8 --memory=16384 --gpus all
+      - minikube start --driver=docker --cpus=8 --memory=16384 --gpus all --insecure-registry srv100:5050
 
   up:
     desc: Deploy LLM runtime resources
